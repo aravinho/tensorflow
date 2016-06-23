@@ -15,30 +15,36 @@ using namespace std;
 DataFlowGraph::DataFlowGraph() {
 	nodes = new unordered_map<string, Node *>();
 	num_nodes = 0;
+	loss_node_added = false;
 }
 
 
 /* ---------------- Nodes and Edges ----------- */
 
-bool DataFlowGraph::add_node(Node *node) {
+int DataFlowGraph::add_node(Node *node) {
 	if (node == NULL) {
-		return false;
+		return -1;
 	}
 
 	// If we are adding the loss node, make sure to set the loss node's parent to be itself.
 	if (node->get_type() == VariableType::LOSS) {
+		if (loss_node_added) {
+			return -1;
+		}
+
 		loss_node = node;
 		loss_var_name = node->get_name();
+		loss_node_added = true;
 		node->set_parent(node);
 	}
 
 	if (nodes->count(node->get_name()) > 0) {
-		return false;
+		return -1;
 	}
 
 	nodes->insert(make_pair(node->get_name(), node));
 	num_nodes++;
-	return true;
+	return 0;
 }
 
 

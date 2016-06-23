@@ -1,13 +1,10 @@
 #include <string>
-#include <iostream>
 #include <fstream>
 #include "Node.h"
 #include "utilities.h"
 
 
 using namespace std;
-
-/* A node in the dependency graph. */
 
 
 /* ----------- Constructors ------------- */
@@ -17,9 +14,7 @@ Node::Node() {
 	mark = 0;
 }
 
-/* Creates a node with the given NAME.
- * If IS_CONSTANT is set, this node will represent a constant (a float).
- */
+
 Node::Node(string node_name, bool is_constant) {
 	name = node_name;
 

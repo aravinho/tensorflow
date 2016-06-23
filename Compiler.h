@@ -7,39 +7,17 @@
 
 using namespace std;
 
-/* Returns a string that is the name of the partial derivative of var 1 with respect to var 2.
- * If var1 were "foo", and var2 were "bar", this method would return "d/foo/d/bar".
+
+/* The purpose of compilation is to translate the Shape Program into the Gradient Computing Program (GCP).
+ * Compilation occurs in these three steps:
+ *
+ *  1. Parse the Shape Program line by line, building up the Data Flow Graph.
+ *      Copy each line directly into the GCP.
+ *  2. Topologically sort the Data Flow Graph.
+ *  3. Visit the nodes in the sorted order.
+ *      At each node, add lines to the GCP that declare and define the appropriate partial derivative variables.
  */
-string generate_partial_var_name(const string& var1, const string& var2);
-
-/* Adds the declaration of a partial derivative to the GCP.
- * The variable is the partial derivative of the Loss variable with respect to the variable represented by the given node.
- * Returns the name of this variable.
- */
-string declare_partial_lambda(Node *node, string loss_name, ofstream &gcp);
-
-/* Adds the definition of a partial derivative to the GCP.
- * The variable defined is the partial derivative of the Loss variable with respect to the variable represented by the given node.
- * partial(Loss, x) = partial(Loss, x.parent) * partial(x.parent, x)
- */ 
-void define_partial_lambda(Node *node, string loss_name, ofstream &gcp, string partial_var_name);
-
-/* These two methods are nearly identical.
- * They add the declaration of a partial derivative to the GCP.
- * This is the partial derivative of the given node with respect to its first/second child.
- * Returns the name of this variable.
- * If the given node doesn't have a first/second child (or its first/second child is constant), returns an empty string.
- */
-string declare_child_one_partial(Node *node, ofstream &gcp);
-string declare_child_two_partial(Node *node, ofstream &gcp);
-
-void define_child_one_partial(Node *node, ofstream &gcp, string child_one_partial);
-void define_child_two_partial(Node *node, ofstream &gcp, string child_two_partial);
-
-void declare_childrens_partial(Node *node, ofstream &gcp, char child_one_partial[], char child_two_partial[], int *declared_child_one_partial, int *declared_child_two_partial);
-void define_childrens_partial(Node *node, ofstream &gcp, char child_one_partial[], char child_two_partial[], int declared_child_one_partial, int declared_child_two_partial);
-
-
+ 
 class Compiler {
 
     /* This Data Flow Graph is built up over the course of compilation.
@@ -79,6 +57,43 @@ public:
 
 };
 
+
+
+/* ------------------------ Helper Functions ------------------- */
+
+/* Returns a string that is the name of the partial derivative of var 1 with respect to var 2.
+ * If var1 were "foo", and var2 were "bar", this method would return "d/foo/d/bar".
+ */
+string generate_partial_var_name(const string& var1, const string& var2);
+
+/* Adds the declaration of a partial derivative to the GCP.
+ * The variable is the partial derivative of the Loss variable with respect to the variable represented by the given node.
+ * Returns the name of this variable.
+ */
+string declare_partial_lambda(Node *node, string loss_name, ofstream &gcp);
+
+/* Adds the definition of a partial derivative to the GCP.
+ * The variable defined is the partial derivative of the Loss variable with respect to the variable represented by the given node.
+ * partial(Loss, x) = partial(Loss, x.parent) * partial(x.parent, x)
+ */ 
+void define_partial_lambda(Node *node, string loss_name, ofstream &gcp, string partial_var_name);
+
+/* These two methods are nearly identical.
+ * They add the declaration of a partial derivative to the GCP.
+ * This is the partial derivative of the given node with respect to its first/second child.
+ * Returns the name of this variable.
+ * If the given node doesn't have a first/second child (or its first/second child is constant), returns an empty string.
+ */
+string declare_child_one_partial(Node *node, ofstream &gcp);
+string declare_child_two_partial(Node *node, ofstream &gcp);
+
+/* These two methods are nearly identical.
+ * They add the definition of a partial derivative to the GCP.
+ * This is the partial derivative of the given node with respect to its first/second child.
+ * This partial derivative is calculated using basic Calculus rules for partial differentiation.
+ */
+void define_child_one_partial(Node *node, ofstream &gcp, string child_one_partial);
+void define_child_two_partial(Node *node, ofstream &gcp, string child_two_partial);
 
 
 #endif

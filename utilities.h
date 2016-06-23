@@ -3,12 +3,15 @@
 
 #include <string>
 
+using namespace std;
+
+
 /* Defines enum classes and associated getter methods.
  * These enum classes represent Instruction Types, Variable Types, or Operation Types.
+ * Also defines various assorted helper methods.
  */
 
-
-using namespace std;
+/* --------------------- Enum Classes and Methods ------------------- */
 
 /* An instruction in a Shape Program is either a Declaration or a Definition.
  */
@@ -47,6 +50,9 @@ InstructionType get_instruction_type(const std::string &inst_type);
 VariableType get_variable_type(const string &var_type);
 OperationType get_operation_type(const string &oper);
 
+
+
+/* ------------------------- Assorted Helper Methods ------------------- */
 
 /* Returns true if the given string cannot be parsed as a float.
  * The try-catch block is because the stof method throws an exception if the string cannot be parsed as a float.

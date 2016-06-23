@@ -1,7 +1,10 @@
 #include "utilities.h"
 #include <fstream>
 
+
 using namespace std;
+
+/* -------------- Enum Classes ---------------- */
 
 InstructionType get_instruction_type(const string &inst_type) {
     if (inst_type.compare("declare") == 0) {
@@ -51,6 +54,8 @@ OperationType get_operation_type(const string &oper) {
     return OperationType::INVALID_OPERATION;
 }
 
+
+/* ------------------ Helper Methods ---------------- */
 
 bool is_constant(const string& name) {
     size_t size;

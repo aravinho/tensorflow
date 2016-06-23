@@ -6,27 +6,24 @@
 
 using namespace std;
 
-/* A node in the dependency graph.
- * Contains a name, operation (add, mul, weight)
- * Contains an array of partial derivatives, one w.r.t. each of the weight variables in the graph.
- * Contains pointers to its two operand nodes.
+/* A node in the Data Flow Graph.
+ * This node represents a variable (or a constant) in the computation.
+ * Each node contains a name and a type (input, weight, intvar, constant, etc)
+ * Some nodes (intvars, outputs, loss) may contain one or two children.
+ * The output of the children node flows to the parent.
+ * Non-constant nodes contain operation (add, mul, weight), that describes how their output is a function of their two children.
 */
+ 
 class Node {
     string name;
     float constant_value;
     VariableType type;
-    //char type[50];
+    OperationType operation;
 
     string parent_name;
-    //char parent_name[50];
     Node *parent;
 
-    OperationType operation;
-    //char operation[50];
-
     string child_one_name, child_two_name;
-    //char child_one_name[50];
-    //char child_two_name[50];
     Node *child_one, *child_two;
     int num_children;
 
@@ -38,29 +35,29 @@ class Node {
 public: 
     
     Node();
+    /* Creates a node with the given NAME.
+     * If IS_CONSTANT is set, this node will represent a constant (a float).
+     */
     Node(string node_name, bool is_constant);
-    //Node(float constant);
+
 
     string get_name() const;
     void set_name(string new_name);
     VariableType get_type() const;
-    //char *get_type();
-    void set_type(VariableType new_type);       // can we pass in VariableType::INPUT, for example?
+    void set_type(VariableType new_type);
     bool is_constant() const;
     OperationType get_operation() const;
     void set_operation(OperationType new_operation);
 
+
     string get_parent_name() const;
-    //char *get_parent_name();
-    Node *get_parent() const;                   // return Node & or Node *
+    Node *get_parent() const;                   
     bool set_parent(Node *new_parent);
 
     
     string get_child_one_name() const;
     string get_child_two_name() const;
-    //char *get_child_one_name();
-    //char *get_child_two_name();
-    Node *get_child_one() const;                  // return Node ref or ptr?
+    Node *get_child_one() const;                  
     Node *get_child_two() const;
 
     /* Sets a child of the current node to be the given node NEW_CHILD.
@@ -70,9 +67,10 @@ public:
      * This method returns true otherwise.
      */
     bool set_child(Node *new_child);                // pass Node ref or ptr?
-    
+
     bool has_child_with_name(const string& child_name) const;
     int get_num_children() const;
+
 
     int get_mark() const;
     void clear_mark();

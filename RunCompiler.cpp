@@ -5,51 +5,21 @@
 
 #include "Compiler.h"
 
-/* Returns true if there is no file with the given FILENAME.
+
+/* Runs the Compiler.
+ * The first argument is the name of the file from which the Shape Program is read.
+ * The second argument is the name of the file to which the GCP is written.
  */
-/*bool invalid_file_name(const char *filename) {
-    if (filename == NULL) {
-        return true;
-    }
 
-    ifstream f(filename);
-    bool valid = f.good();
-
-    if (f.is_open()) {
-        f.close();
-    }
-    return !valid;
-}*/
-
-
+ 
 int main(int argc, char *argv[]) {
     if (argc != 3) {
         cerr << "Must provide two arguments, a Shape Program file name and a GCP file name." << endl;
         return -1;
     }
 
-    /*if (invalid_file_name(argv[1])) {
-        cerr << "Invalid Shape Program file name." << endl;
-        return -1;
-    }*/
-
-
     Compiler c;
     c.compile(string(argv[1]), string(argv[2]));
     
-    /*DataFlowGraph *dfg = new DataFlowGraph();
-    compile("shape_prog.tf", dfg, "gcp.tf");
-    cout << endl;
-    cout << endl;
-    cout << "num_nodes: " << dfg->get_num_nodes() << endl;
-
-    unordered_map<string, Node*>* all_nodes = dfg->get_all_nodes();
-    Node *node;
-    for ( auto it = all_nodes->begin(); it != all_nodes->end(); ++it ) {
-        cout << "name: " << it->first << endl;
-        node = it->second;
-        cout << "node name: " << node->get_name() << ", parent name: " << node->get_parent_name();
-        cout << ", child one: " << node->get_child_one_name() << ", child two: " << node->get_child_two_name() << endl;
-    }*/
     return 0;
 }

@@ -111,8 +111,11 @@ int Compiler::compile(const string& shape_prog_filename, const string& gcp_filen
 
 int Compiler::parse_line(char line[]) {
 
-    if (!line || strcmp(line, "") == 0) {
+    if (!line) {
         return -1;
+    }
+    if (strcmp(line, "") == 0) {
+        return 0;
     }
 
     // Grab the first token of the instruction (first token in the line).
@@ -140,8 +143,8 @@ int Compiler::parse_line(char line[]) {
 
         Node *new_node = new Node(var_name, false);
         new_node->set_type(get_variable_type(var_type));
-        dfg->add_node(new_node);
-        return 0;
+        
+        return dfg->add_node(new_node);
     } 
 
     // If the instruction is an expression that defines a variable:
@@ -244,6 +247,7 @@ string declare_child_one_partial(Node *node, ofstream &gcp) {
 
 }
 
+
 string declare_child_two_partial(Node *node, ofstream &gcp) {
     int num_children = node->get_num_children();
     char line[MAX_LINE_LENGTH];
@@ -264,6 +268,7 @@ string declare_child_two_partial(Node *node, ofstream &gcp) {
 
 }
 
+
 void define_child_one_partial(Node *node, ofstream &gcp, string child_one_partial) {
     char line[MAX_LINE_LENGTH];
     strcpy(line, "define ");
@@ -277,7 +282,7 @@ void define_child_one_partial(Node *node, ofstream &gcp, string child_one_partia
     else if (node->get_operation() == OperationType::MUL) {
         // if c = a * a, partial(c, a) = 2a
         if (node->get_child_one_name().compare(node->get_child_two_name()) == 0) {
-            strcat(line, "mul 2");
+            strcat(line, "mul 2 ");
             strcat(line, node->get_child_one_name().c_str());
         } 
         // if c = a * b, where b != a, partial(c, a) = b
@@ -289,6 +294,7 @@ void define_child_one_partial(Node *node, ofstream &gcp, string child_one_partia
     gcp.write(line, strlen(line));
     gcp.write("\n", 1);
 }
+
 
 void define_child_two_partial(Node *node, ofstream &gcp, string child_two_partial) {
     char line[MAX_LINE_LENGTH];
@@ -315,109 +321,3 @@ void define_child_two_partial(Node *node, ofstream &gcp, string child_two_partia
     gcp.write(line, strlen(line));
     gcp.write("\n", 1);
 }
-
-
-
-/*void declare_childrens_partial(Node *node, ofstream &gcp, char child_one_partial[], char child_two_partial[], int *declared_child_one_partial, int *declared_child_two_partial) {
-    int num_children = node->get_num_children();
-
-    char line_one[100];
-    char line_two[100];
-
-    if (num_children >= 1 && !node->get_child_one()->is_constant()) {
-        strcpy(line_one, "declare intvar ");
-        generate_partial_var_name(child_one_partial, node->get_name(), node->get_child_one_name());
-        strcat(line_one, child_one_partial);
-        cout << line_one << endl;
-        gcp.write(line_one, strlen(line_one));
-        gcp.write("\n", 1);
-        *declared_child_one_partial = 1;
-    }
-
-    // if theres a second child, it's different from the first, and it's not constant
-    if (num_children >= 2 && strcmp(node->get_child_one_name(), node->get_child_two_name()) != 0 && !node->get_child_two()->is_constant()) {
-        strcpy(line_two, "declare intvar ");
-        generate_partial_var_name(child_two_partial, node->get_name(), node->get_child_two_name());
-        strcat(line_two, child_two_partial);
-        cout << line_two << endl;
-        gcp.write(line_two, strlen(line_two));
-        gcp.write("\n", 1);
-        *declared_child_two_partial = 1;
-    }
-
-}
-
-
-void define_childrens_partial(Node *node, ofstream &gcp, char child_one_partial[], char child_two_partial[], int declared_child_one_partial, int declared_child_two_partial) {
-    if (declared_child_one_partial) {
-        char line_one[100];
-        strcpy(line_one, "define ");
-        strcat(line_one, child_one_partial);
-        strcat(line_one, " = ");
-
-        if (strcmp(node->get_operation(), "add") == 0) {
-            strcat(line_one, "1");
-        }
-        else if (strcmp(node->get_operation(), "mul") == 0) {
-            if (strcmp(node->get_child_one_name(), node->get_child_two_name()) == 0) {
-                strcat(line_one, "mul 2 ");
-                strcat(line_one, node->get_child_one_name());
-            } else {
-                strcat(line_one, node->get_child_two_name());
-            }
-        }
-
-        cout << line_one << endl;
-        gcp.write(line_one, strlen(line_one));
-        gcp.write("\n", 1);
-    }
-
-    if (declared_child_two_partial) {
-        char line_two[100];
-        strcpy(line_two, "define ");
-        strcat(line_two, child_two_partial);
-        strcat(line_two, " = ");
-
-        if (strcmp(node->get_operation(), "add") == 0) {
-            strcat(line_two, "1");
-        }
-        else if (strcmp(node->get_operation(), "mul") == 0) {
-            if (strcmp(node->get_child_one_name(), node->get_child_two_name()) == 0) {
-                strcat(line_two, "mul 2 ");
-                strcat(line_two, node->get_child_two_name());
-            } else {
-                strcat(line_two, node->get_child_one_name());
-            }
-        }
-
-        cout << line_two << endl;
-        gcp.write(line_two, strlen(line_two));
-        gcp.write("\n", 1);
-    }
-}
-
-*/
-
-/*int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        cerr << "Must provide two arguments, a Shape Program file name and a GCP file name." << endl;
-        return -1;
-    }
-
-    DataFlowGraph *dfg = new DataFlowGraph();
-    compile("shape_prog.tf", dfg, "gcp.tf");
-    cout << endl;
-    cout << endl;
-    cout << "num_nodes: " << dfg->get_num_nodes() << endl;
-
-    unordered_map<string, Node*>* all_nodes = dfg->get_all_nodes();
-    Node *node;
-    for ( auto it = all_nodes->begin(); it != all_nodes->end(); ++it ) {
-        cout << "name: " << it->first << endl;
-        node = it->second;
-        cout << "node name: " << node->get_name() << ", parent name: " << node->get_parent_name();
-        cout << ", child one: " << node->get_child_one_name() << ", child two: " << node->get_child_two_name() << endl;
-    }
-    return 0;
-}
-*/

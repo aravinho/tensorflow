@@ -10,12 +10,23 @@
 
 using namespace std;
 
+
+/* The Data Flow Graph is a graphical representation of how data flows through a computation.
+ * The graph is represented as a mapping of node names to nodes, and is built during the parsing stage of the Compile Phase.
+ * Each node represents a variable (or a constant) in the computation.
+ * The Data Flow Graph is important, because it can be topologically sorted.
+ * A topological sort of the DFG gives an order in which to visit nodes when computing partial derivatives.
+ */
+ 
 class DataFlowGraph {
 
 	unordered_map<string, Node*>* nodes;
+	int num_nodes;
+
 	Node *loss_node;
 	string loss_var_name;
-	int num_nodes;
+	bool loss_node_added;
+	
 
 public:
 
@@ -29,11 +40,12 @@ public:
 	/* Adds a node to the Data Flow Graph.
  	 * Stores a mapping from node-name to node.
  	 * If the given node is the loss node, makes a note of this.
- 	 * Returns true if the node was successfully added.
- 	 * Returns false if there is already a node by this name in the graph.
- 	 * This method will not add the given node if there is an existing node by the same name.
+ 	 * Returns 0 if the node was successfully added.
+ 	 * Returns -1 if there is already a node by this name in the graph.
+ 	 * Returns -1 if a loss node is being added for the second time.
+ 	 * In both failure cases, this method will not add the given node if there is an existing node by the same name.
  	 */
-	bool add_node(Node *node);
+	int add_node(Node *node);
 
 	/* Returns a pointer to the node corresponding to the given NAME.
  	 * Returns NULL if there is no node by the name in the Data Flow Graph.
