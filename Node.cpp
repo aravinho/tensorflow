@@ -2,63 +2,71 @@
 #include <iostream>
 #include <fstream>
 #include "Node.h"
+#include "utilities.h"
+
 
 using namespace std;
 
 /* A node in the dependency graph. */
 
-Node::Node() {
 
+/* ----------- Constructors ------------- */
+
+Node::Node() {
+	num_children = 0;
+	mark = 0;
 }
 
-/* Creates a node with the given name.
+/* Creates a node with the given NAME.
+ * If IS_CONSTANT is set, this node will represent a constant (a float).
  */
-Node::Node(char *node_name, bool is_constant) {
-	strcpy(name, node_name);
-	mark = 0;
+Node::Node(string node_name, bool is_constant) {
+	name = node_name;
+
 	if (is_constant) {
 		constant_value = stof(node_name);
-		strcpy(type, "constant");
+		set_type(VariableType::CONSTANT);
 	}
+
+	num_children = 0;
+	mark = 0;
 }
 
-/* Creates a "constant node" with the given value.
- * Names this node "constant", and sets its type to Constant.
- * There can be multiple constant nodes in a Data Flow Graph.
- */
-/*Node::Node(char *node_name, bool is_constant) {
-	constant_value = constant;
-	strcpy(name, "constant");
-	strcpy(type, "constant");
-	mark = 0;
-}*/
 
+/* ----------- Basic Info ---------------- */
 
-
-char *Node::get_name() {
+string Node::get_name() const {
 	return name;
 }
-void Node::set_name(char *new_name) {
-	strcpy(name, new_name);
+void Node::set_name(string new_name) {
+	name = new_name;
 }
   
-//enum Node::variable_type_t get_type();
-char *Node::get_type() {
+VariableType Node::get_type() const {
 	return type;
 }
-void Node::set_type(char *new_type) {
-	strcpy(type, new_type);
-}
-bool Node::is_constant() {
-	return (strcmp(type, "constant") == 0);
+void Node::set_type(VariableType new_type) {
+	type = new_type;
 }
 
+bool Node::is_constant() const {
+	return type == VariableType::CONSTANT;
+}
+
+OperationType Node::get_operation() const {
+	return operation;
+}
+void Node::set_operation(OperationType new_operation) {
+	operation = new_operation;
+}
 
 
-char *Node::get_parent_name() {
+/* ----------- Parent Info --------------- */
+
+string Node::get_parent_name() const {
 	return parent_name;
 }
-Node *Node::get_parent() {
+Node *Node::get_parent() const {
 	return parent;
 }
 bool Node::set_parent(Node *new_parent) {
@@ -66,68 +74,53 @@ bool Node::set_parent(Node *new_parent) {
 		return false;
 	}
 	parent = new_parent;
-	strcpy(parent_name, new_parent->get_name());
+	parent_name = new_parent->get_name();
 	return true;
 }
 
 
-    
-//enum Node::operation_type_t get_operation();
-char *Node::get_operation() {
-	return operation;
-}
-void Node::set_operation(char *new_operation) {
-	strcpy(operation, new_operation);
-}
+/* ------------ Child Info ---------------- */
 
-
-
-
-char *Node::get_child_one_name() {
+string Node::get_child_one_name() const {
 	return child_one_name;
 }
-char *Node::get_child_two_name() {
+string Node::get_child_two_name() const {
 	return child_two_name;
 }
-Node *Node::get_child_one() {
+Node *Node::get_child_one() const {
 	return child_one;
 }
-Node *Node::get_child_two() {
+Node *Node::get_child_two() const {
 	return child_two;
 }
 
-/* Sets a child of the current node to be the given node NEW_CHILD.
- * If the current node has no children, NEW_CHILD becomes Child 1.
- * If the current node has no children, NEW_CHILD becomes Child 2.
- * If the current node has two children already, this method returns false and nothing happens.
- * This method returns true otherwise.
- */
 bool Node::set_child(Node *new_child) {
-	if (num_children == 2) {
+	if (new_child == NULL || num_children == 2) {
 		return false;
 	}
-
+	
 	if (num_children == 0) {
 		child_one = new_child;
-		strcpy(child_one_name, new_child->get_name());
+		child_one_name = new_child->get_name();
 	} else if (num_children == 1) {
 		child_two = new_child;
-		strcpy(child_two_name, new_child->get_name());
+		child_two_name = new_child->get_name();
 	}
 	num_children++;
 	return true;
 }
 
-bool Node::has_child_with_name(char *child_name) {
-	return (strcmp(child_one_name, child_name) == 0) || (strcmp(child_two_name, child_name) == 0);
+bool Node::has_child_with_name(const string& child_name) const {
+	return (child_one_name.compare(child_name) == 0 || child_two_name.compare(child_name) == 0);
 }
-
-
-int Node::get_num_children() {
+int Node::get_num_children() const {
 	return num_children;
 }
 
-int Node::get_mark() {
+
+/* ---------------- Topological Sort Mark Info -------------- */
+
+int Node::get_mark() const {
 	return mark;
 }
 void Node::clear_mark() {
@@ -139,13 +132,13 @@ void Node::temporary_mark() {
 void Node::permanent_mark() {
 	mark = 2;
 }
-bool Node::is_unmarked() {
+bool Node::is_unmarked() const {
 	return mark == 0;
 }
-bool Node::is_temporary_marked() {
+bool Node::is_temporary_marked() const {
 	return mark == 1;
 }
-bool Node::is_permanent_marked() {
+bool Node::is_permanent_marked() const {
 	return mark == 2;
 }
 

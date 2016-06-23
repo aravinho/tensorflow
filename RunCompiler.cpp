@@ -7,7 +7,7 @@
 
 /* Returns true if there is no file with the given FILENAME.
  */
-bool invalid_file_name(const char *filename) {
+/*bool invalid_file_name(const char *filename) {
     if (filename == NULL) {
         return true;
     }
@@ -19,7 +19,7 @@ bool invalid_file_name(const char *filename) {
         f.close();
     }
     return !valid;
-}
+}*/
 
 
 int main(int argc, char *argv[]) {
@@ -28,15 +28,14 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    if (invalid_file_name(argv[1])) {
+    /*if (invalid_file_name(argv[1])) {
         cerr << "Invalid Shape Program file name." << endl;
         return -1;
-    }
+    }*/
 
-    cout << "success" << endl;
 
     Compiler c;
-    //c.compile(argv[1], argv[2]);
+    c.compile(string(argv[1]), string(argv[2]));
     
     /*DataFlowGraph *dfg = new DataFlowGraph();
     compile("shape_prog.tf", dfg, "gcp.tf");

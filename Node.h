@@ -2,7 +2,7 @@
 #define NODE_H
 
 #include <string>
-//#include "Compiler.h"
+#include "utilities.h"
 
 using namespace std;
 
@@ -12,19 +12,21 @@ using namespace std;
  * Contains pointers to its two operand nodes.
 */
 class Node {
-    char name[50];
+    string name;
     float constant_value;
-    //enum variable_type_t type;
-    char type[50];
+    VariableType type;
+    //char type[50];
 
-    char parent_name[50];
+    string parent_name;
+    //char parent_name[50];
     Node *parent;
 
-    //enum operation_type_t operation;
-    char operation[50];
+    OperationType operation;
+    //char operation[50];
 
-    char child_one_name[50];
-    char child_two_name[50];
+    string child_one_name, child_two_name;
+    //char child_one_name[50];
+    //char child_two_name[50];
     Node *child_one, *child_two;
     int num_children;
 
@@ -36,40 +38,49 @@ class Node {
 public: 
     
     Node();
-    Node(char *name, bool is_constant);
+    Node(string node_name, bool is_constant);
     //Node(float constant);
 
-    char *get_name();
-    void set_name(char *new_name);
-    //enum variable_type_t get_type();
-    char *get_type();
-    void set_type(char *new_type);
-    bool is_constant();
+    string get_name() const;
+    void set_name(string new_name);
+    VariableType get_type() const;
+    //char *get_type();
+    void set_type(VariableType new_type);       // can we pass in VariableType::INPUT, for example?
+    bool is_constant() const;
+    OperationType get_operation() const;
+    void set_operation(OperationType new_operation);
 
-    char *get_parent_name();
-    Node *get_parent();
+    string get_parent_name() const;
+    //char *get_parent_name();
+    Node *get_parent() const;                   // return Node & or Node *
     bool set_parent(Node *new_parent);
 
-    //enum operation_type_t get_operation();
-    char *get_operation();
-    void set_operation(char *new_operation);
+    
+    string get_child_one_name() const;
+    string get_child_two_name() const;
+    //char *get_child_one_name();
+    //char *get_child_two_name();
+    Node *get_child_one() const;                  // return Node ref or ptr?
+    Node *get_child_two() const;
 
-    char *get_child_one_name();
-    char *get_child_two_name();
-    Node *get_child_one();
-    Node *get_child_two();
-    bool set_child(Node *new_child);
-    bool has_child_with_name(char *child_name);
+    /* Sets a child of the current node to be the given node NEW_CHILD.
+     * If the current node has no children, NEW_CHILD becomes Child 1.
+     * If the current node has no children, NEW_CHILD becomes Child 2.
+     * If the current node has two children already, this method returns false and nothing happens.
+     * This method returns true otherwise.
+     */
+    bool set_child(Node *new_child);                // pass Node ref or ptr?
+    
+    bool has_child_with_name(const string& child_name) const;
+    int get_num_children() const;
 
-    int get_num_children();
-
-    int get_mark();
+    int get_mark() const;
     void clear_mark();
     void temporary_mark();
     void permanent_mark();
-    bool is_unmarked();
-    bool is_temporary_marked();
-    bool is_permanent_marked();
+    bool is_unmarked() const;
+    bool is_temporary_marked() const;
+    bool is_permanent_marked() const;
 
 };
 

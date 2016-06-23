@@ -1,48 +1,81 @@
-#ifndef TENSORFLOW_H
-#define TENSORFLOW_H
+#ifndef COMPILER_H
+#define COMPILER_H
 
 #include "Node.h"
 #include "DataFlowGraph.h"
+#include "utilities.h"
 
 using namespace std;
 
+/* Returns a string that is the name of the partial derivative of var 1 with respect to var 2.
+ * If var1 were "foo", and var2 were "bar", this method would return "d/foo/d/bar".
+ */
+string generate_partial_var_name(const string& var1, const string& var2);
 
-enum instruction_type_t {
-    DECLARE,
-    DEFINE,
-    INVALID_INST
-};
+/* Adds the declaration of a partial derivative to the GCP.
+ * The variable is the partial derivative of the Loss variable with respect to the variable represented by the given node.
+ * Returns the name of this variable.
+ */
+string declare_partial_lambda(Node *node, string loss_name, ofstream &gcp);
 
-enum variable_type_t {
-    INPUT,
-    OUTPUT,
-    EXP_OUTPUT,
-    WEIGHT,
-    INTVAR,
-    LOSS,
-    CONSTANT,
-    INVALID_VAR_TYPE
-};
+/* Adds the definition of a partial derivative to the GCP.
+ * The variable defined is the partial derivative of the Loss variable with respect to the variable represented by the given node.
+ * partial(Loss, x) = partial(Loss, x.parent) * partial(x.parent, x)
+ */ 
+void define_partial_lambda(Node *node, string loss_name, ofstream &gcp, string partial_var_name);
 
-enum operation_type_t {
-    ADD,
-    MUL,
-    INVALID_OPERATION
-};
+/* These two methods are nearly identical.
+ * They add the declaration of a partial derivative to the GCP.
+ * This is the partial derivative of the given node with respect to its first/second child.
+ * Returns the name of this variable.
+ * If the given node doesn't have a first/second child (or its first/second child is constant), returns an empty string.
+ */
+string declare_child_one_partial(Node *node, ofstream &gcp);
+string declare_child_two_partial(Node *node, ofstream &gcp);
 
-enum instruction_type_t get_instruction_type(char inst[]);
-enum variable_type_t get_variable_type(char var_name[]);
-enum operation_type_t get_operation_type(char oper[]);
+void define_child_one_partial(Node *node, ofstream &gcp, string child_one_partial);
+void define_child_two_partial(Node *node, ofstream &gcp, string child_two_partial);
+
+void declare_childrens_partial(Node *node, ofstream &gcp, char child_one_partial[], char child_two_partial[], int *declared_child_one_partial, int *declared_child_two_partial);
+void define_childrens_partial(Node *node, ofstream &gcp, char child_one_partial[], char child_two_partial[], int declared_child_one_partial, int declared_child_two_partial);
 
 
 class Compiler {
+
+    /* This Data Flow Graph is built up over the course of compilation.
+     * Each variable in the Shape Program is represented by a node.
+     * The directed edges represent dependencies.
+     * A topological sort gives the order in which nodes are to be visited when computing partial derivatives.
+     * This ordering determines the layout of the GCP (the output of the Compile Phase).
+     */
     DataFlowGraph *dfg;
+
 public:
     Compiler();
-    void compile(char *shape_prog_filename, DataFlowGraph *dfg, char *gcp_filename);
+
+    /* This method builds the GCP, through the following steps:
+     * 
+     * Iterates through all the lines of the Shape Program, sending each line to be parsed, and copying it into the GCP.
+     * After the parsing phase, the Data Flow Graph is complete.
+     * Topologically sorts the DFG.
+     * Visits each node in order, copying the declarations and definitions of partial derivative variables into the GCP.
+     * 
+     * Returns -1 if an error occurred, and 0 otherwise.
+     */
+    int compile(const string& shape_prog_filename, const string& gcp_filename);
+
+    /* Reads one line of code, and takes the appropriate actions.
+     * If the line is the declaration of a variable, a node is added to the Data Flow Graph.
+     * If the line defines an expression for the variable, the respective node is updated.
+     * Its operation is set, and the appropriate edges are added between nodes.
+     * Once this method is called on every line, the Data Flow Graph is ready for the next step, the Topological sort.
+     *
+     * This method returns -1 if the line is empty or has invalid syntax, and 0 if it was successfully parsed.
+     */
     int parse_line(char line[]);
-    void declare_partial_lambda(Node *node, char *loss_name, ofstream &gcp);
-    void define_partial_lambda(Node *node, char *loss_name, ofstream &gcp, char partial_var_name[]);
+
+    //void declare_partial_lambda(Node *node, string loss_name, ofstream &gcp, char partial_var_name[]);
+    //void define_partial_lambda(Node *node, string loss_name, ofstream &gcp, char partial_var_name[]);
 
 };
 
