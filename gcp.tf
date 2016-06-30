@@ -1,20 +1,21 @@
 declare input x
-declare weight w
-declare exp_output y
-declare output o
+declare input w
+declare input y
+declare intvar o
 declare intvar neg_y
 declare intvar diff
-declare loss lambda
+declare intvar lambda
 
 define o  =  mul  x  w
 define neg_y  =  mul  -1  y
 define diff  =  add  o  neg_y
 define lambda  =  mul  diff  diff
 
+
 declare intvar d/lambda/d/lambda
 define d/lambda/d/lambda = 1
 declare intvar d/lambda/d/diff
-define d/lambda/d/diff = mul 2diff
+define d/lambda/d/diff = mul 2 diff
 
 declare intvar d/diff/d/o
 declare intvar d/diff/d/neg_y

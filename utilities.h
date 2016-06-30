@@ -5,6 +5,27 @@
 
 using namespace std;
 
+/* Constants used by the Compiler and Interpreter.
+ */
+#define MAX_NUM_VARIABLES 100
+#define MAX_LINE_LENGTH 1000
+#define MAX_SHAPE_PROG_VAR_NAME_LENGTH 80
+#define MAX_GCP_VAR_NAME_LENGTH 200
+
+#define INVALID_LINE -1
+#define INVALID_VAR_NAME -2
+#define VAR_DEFINED_BEFORE_DECLARED -3
+#define VAR_DEFINED_TWICE -4
+#define VAR_DECLARED_TWICE -5
+#define INPUT_VALUE_NOT_PROVIDED -6
+#define VAR_REFERENCED_BEFORE_DEFINED -7
+#define CANNOT_DEFINE_I_W_EO -8
+#define OTHER_ERROR -9
+
+#define DUPLICATE_SUCCESS_DECLARE 20
+#define DUPLICATE_SUCCESS_DEFINE 21
+#define DUPLICATE_SUCCESS_EMPTY_LINE 22
+
 
 /* Defines enum classes and associated getter methods.
  * These enum classes represent Instruction Types, Variable Types, or Operation Types.

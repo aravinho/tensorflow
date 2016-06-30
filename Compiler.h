@@ -29,6 +29,10 @@ class Compiler {
     DataFlowGraph *dfg;
 
 public:
+
+    /* Constructor.
+     * Initializes a new Data Flow Graph.
+     */
     Compiler();
 
     /* This method builds the GCP, through the following steps:
@@ -38,7 +42,7 @@ public:
      * Topologically sorts the DFG.
      * Visits each node in order, copying the declarations and definitions of partial derivative variables into the GCP.
      * 
-     * Returns -1 if an error occurred, and 0 otherwise.
+     * Returns 0 on success, and the appropriate error code otherwise (see utilities.h).
      */
     int compile(const string& shape_prog_filename, const string& gcp_filename);
 
@@ -48,12 +52,19 @@ public:
      * Its operation is set, and the appropriate edges are added between nodes.
      * Once this method is called on every line, the Data Flow Graph is ready for the next step, the Topological sort.
      *
-     * This method returns -1 if the line is empty or has invalid syntax, and 0 if it was successfully parsed.
+     * This method returns 0 if the line was successfully parsed.
+     * Returns the appropriate error code otherwise (see utilities.h).
      */
     int parse_line(char line[]);
 
-    //void declare_partial_lambda(Node *node, string loss_name, ofstream &gcp, char partial_var_name[]);
-    //void define_partial_lambda(Node *node, string loss_name, ofstream &gcp, char partial_var_name[]);
+    /* Populates gcp_line with a near duplicate of shape_line.
+     * The variable type may be changed, though.
+     * Inputs, weights and expected outputs from the Shape Program all become inputs in the GCP.
+     * Outputs, intvars, and loss variables from the Shape Program all become intvars in the GCP.
+     * Returns DUPLICATE_SUCCESS_DECLARE or DUPLICATE_SUCCESS_DEFINE on success (see utilities.h).
+     * Returns the appropriate error code (see utilities.h) on failure.
+     */
+    int duplicate_line_for_gcp(char shape_line[], char gcp_line[]);
 
 };
 
@@ -94,6 +105,8 @@ string declare_child_two_partial(Node *node, ofstream &gcp);
  */
 void define_child_one_partial(Node *node, ofstream &gcp, string child_one_partial);
 void define_child_two_partial(Node *node, ofstream &gcp, string child_two_partial);
+
+
 
 
 #endif

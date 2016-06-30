@@ -21,5 +21,6 @@ int main(int argc, char *argv[]) {
     Compiler c;
     c.compile(string(argv[1]), string(argv[2]));
     
+    
     return 0;
 }

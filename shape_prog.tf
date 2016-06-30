@@ -10,3 +10,4 @@ define o  =  mul  x  w
 define neg_y  =  mul  -1  y
 define diff  =  add  o  neg_y
 define lambda  =  mul  diff  diff
+

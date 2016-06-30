@@ -7,10 +7,10 @@
 #include "utilities.h"
 #include "Node.h"
 
-#define MAX_NUM_VARIABLES 100
-#define MAX_LINE_LENGTH 1000
-#define MAX_SHAPE_PROG_VAR_NAME_LENGTH 80
-#define MAX_GCP_VAR_NAME_LENGTH 200
+// TO DO
+// instead of straight copying lines from shape to gcp, make sure we alter types
+// inputs, weights, exp outs all become inputs, rest become intvars
+// when we come across a define line, make sure it's not the definition of an input, weight or exp_outp
 
 
 using namespace std;
@@ -29,29 +29,58 @@ int Compiler::compile(const string& shape_prog_filename, const string& gcp_filen
 
     if (invalid_file_name(shape_prog_filename)) {
         cerr << "Invalid Shape Program file name." << endl;
-        return -1;
+        return OTHER_ERROR;
     }
 
     // Open Shape Program and GCP file streams
     ifstream shape_prog(shape_prog_filename);
     ofstream gcp(gcp_filename);
 
-    // buffer to hold the line currently being parsed
-    char line[MAX_LINE_LENGTH];
+    // buffer into which we read a line from the file
+    char shape_line[MAX_LINE_LENGTH];
+
+    // buffer to hold an identical copy of the line read in.
+    // This line is mangled in the creation of the GCP-near-duplicate (See comment in Compiler.h)
+    char shape_line_copy[MAX_LINE_LENGTH];
+
+    // line to hold the GCP-near-duplicate line
+    char gcp_line[MAX_LINE_LENGTH];
+
+    // indicates whether the GCP-near-duplicate was created successfully
+    int duplicate_success = 0;
+
     // indicates whether a line was successfully parsed
     int parse_success;
 
     // Iterate through all the lines of the Shape Program
-    // Copy the line into the GCP, then send the line to be parsed.
+    // Copy the GCP-near-duplicate line into the GCP, then send the line to be parsed.
     while(!shape_prog.eof())
     {
-        shape_prog.getline(line, MAX_LINE_LENGTH);
-        gcp.write(line, strlen(line));
+        shape_prog.getline(shape_line, MAX_LINE_LENGTH);
+        strcpy(shape_line_copy, shape_line);
+
+        duplicate_success = duplicate_line_for_gcp(shape_line_copy, gcp_line);
+
+        if (duplicate_success == DUPLICATE_SUCCESS_DECLARE) {
+            gcp.write(gcp_line, strlen(gcp_line));
+        }
+        else if(duplicate_success == DUPLICATE_SUCCESS_DEFINE) {
+            gcp.write(shape_line, strlen(shape_line));
+        }
+        else if (duplicate_success == DUPLICATE_SUCCESS_EMPTY_LINE) {
+            
+        }
+        else {
+            cerr << "Invalid line: " << shape_line << endl;
+            return duplicate_success;
+        }
+        
         gcp.write("\n", 1);
-        parse_success = parse_line(line);
-        if (parse_success == -1) {
-            cerr << "Invalid line: " << line << endl;
-            return -1;
+
+        parse_success = parse_line(shape_line);
+        if (parse_success != 0) {
+            cerr << "Invalid line: " << shape_line << endl;
+            return parse_success;
         }
     }
 
@@ -96,8 +125,6 @@ int Compiler::compile(const string& shape_prog_filename, const string& gcp_filen
         if (child_two_partial.compare("") != 0) {
             define_child_two_partial(curr_node, gcp, child_two_partial);
         }
-        //declare_childrens_partial(curr_node, gcp, child_one_partial, child_two_partial, &declared_child_one_partial, &declared_child_two_partial);
-        //define_childrens_partial(curr_node, gcp, child_one_partial, child_two_partial, declared_child_one_partial, declared_child_two_partial);
         
         gcp.write("\n", 1);
         
@@ -112,7 +139,7 @@ int Compiler::compile(const string& shape_prog_filename, const string& gcp_filen
 int Compiler::parse_line(char line[]) {
 
     if (!line) {
-        return -1;
+        return INVALID_LINE;
     }
     if (strcmp(line, "") == 0) {
         return 0;
@@ -121,28 +148,44 @@ int Compiler::parse_line(char line[]) {
     // Grab the first token of the instruction (first token in the line).
     // Use this to determine what actions to take.
     char *first_token = strtok(line, " ");
-    InstructionType inst_type = get_instruction_type(string(first_token));
-    if (inst_type == InstructionType::INVALID_INST) {
-        return -1;
+    if (first_token == NULL) {
+        return INVALID_LINE;
     }
 
+    InstructionType inst_type = get_instruction_type(string(first_token));
+    if (inst_type == InstructionType::INVALID_INST) {
+        return INVALID_LINE;
+    }
 
-    string var_type, var_name;
+    char *v_name, *v_type;
+    string var_name;
+    VariableType var_type;
+
     // If the line is a declaration of a variable,
     // simply create a new node, set the variable type, and add it to graph.
     if (inst_type == InstructionType::DECLARE) {
-        var_type = string(strtok(NULL, " "));
-        if (get_variable_type(var_type) == VariableType::INVALID_VAR_TYPE) {
-            return -1;
+        // grab the variable type
+        v_type = strtok(NULL, " ");
+        if (v_type == NULL) {
+            return INVALID_LINE;
+        }
+        var_type = get_variable_type(string(v_type));
+        if (var_type == VariableType::INVALID_VAR_TYPE) {
+            return INVALID_LINE;
         }
 
-        var_name = string(strtok(NULL, " "));
+        // grab the variable name
+        v_name = strtok(NULL, " ");
+        if (v_name == NULL) {
+            return INVALID_LINE;
+        }
+        var_name = string(v_name);
         if (invalid_var_name(var_name)) {
-            return -1;
+            return INVALID_VAR_NAME;
         }
 
         Node *new_node = new Node(var_name, false);
-        new_node->set_type(get_variable_type(var_type));
+        new_node->set_type(var_type);
         
         return dfg->add_node(new_node);
     } 
@@ -151,15 +194,36 @@ int Compiler::parse_line(char line[]) {
     // Update the "operation" field of the variable's node to be "add" or "mul".
     // Create the two-way binding between the operands (children) and the current (parent) node. 
     else if (inst_type == InstructionType::DEFINE) {
-        var_name = string(strtok(NULL, " "));
+
+        // grab the variable name
+        v_name = strtok(NULL, " ");
+        if (v_name == NULL) {
+            return INVALID_LINE;
+        }
+        var_name = string(v_name);
+        if (invalid_var_name(var_name)) {
+            return INVALID_VAR_NAME;
+        }
+
+
+        // grab the node with this name
         Node *node = dfg->get_node(var_name);
 
+        // grab the operation and set the node's operation
         char *equal_sign = strtok(NULL, " ");
-        string operation = string(strtok(NULL, " "));
-        if (get_operation_type(operation) == OperationType::INVALID_OPERATION) {
-            return -1;
+        if (equal_sign == NULL) {
+            return INVALID_LINE;
         }
-        node->set_operation(get_operation_type(operation));
+        char *op = strtok(NULL, " ");
+        if (op == NULL) {
+            return INVALID_LINE;
+        }
+        OperationType operation = get_operation_type(string(op));
+        if (operation == OperationType::INVALID_OPERATION) {
+            return INVALID_LINE;
+        }
+        node->set_operation(operation);
+
 
         string operand_1 = string(strtok(NULL, " "));
         string operand_2 = string(strtok(NULL, " "));
@@ -169,7 +233,7 @@ int Compiler::parse_line(char line[]) {
         return success;
     }
 
-    return -1;
+    return INVALID_LINE;
     
 }
 
@@ -320,4 +384,96 @@ void define_child_two_partial(Node *node, ofstream &gcp, string child_two_partia
 
     gcp.write(line, strlen(line));
     gcp.write("\n", 1);
+}
+
+int Compiler::duplicate_line_for_gcp(char shape_line[], char gcp_line[]) {
+    
+    if (shape_line == NULL || gcp_line == NULL) {
+        cout << "MULL" << endl;
+        return OTHER_ERROR;
+    }
+    if (strcmp(shape_line, "") == 0) {
+        return DUPLICATE_SUCCESS_EMPTY_LINE;
+    }
+
+    cout << "shape line: " << shape_line << endl;
+    // determine instruction type
+    char *first_token = strtok(shape_line, " ");
+    if (first_token == NULL) {
+        return INVALID_LINE;
+    }
+    InstructionType inst_type = get_instruction_type(string(first_token));
+    if (inst_type == InstructionType::INVALID_INST) {
+        return INVALID_LINE;
+    }
+
+
+    // If define, make sure we're not defining an input, weight or exp_output
+    if (inst_type == InstructionType::DEFINE) {
+        
+        // grab name
+        char *v_name = strtok(NULL, " ");
+        if (v_name == NULL) {
+            return INVALID_VAR_NAME;
+        }
+        string var_name(v_name);
+
+        // grab variable type from DFG
+        // cannot define a variable without declaring it first
+        Node *var_node = dfg->get_node(var_name);
+        if (var_node == NULL) {
+            return VAR_DEFINED_BEFORE_DECLARED;
+        }
+        VariableType var_type = var_node->get_type();
+
+        // cannot define an input, weight or exp_output
+        if (var_type == VariableType::INVALID_VAR_TYPE || var_type == VariableType::INPUT
+            || var_type == VariableType::WEIGHT || var_type == VariableType::EXP_OUTPUT) {
+            return CANNOT_DEFINE_I_W_EO;
+        }
+
+        // do more checks before returning
+        return DUPLICATE_SUCCESS_DEFINE;
+    }
+
+    // If declare, change type appropriately
+    if (inst_type == InstructionType::DECLARE) {
+        cout << "A" << endl;
+        char *v_type = strtok(NULL, " ");
+        if (v_type == NULL) {
+            return INVALID_LINE;
+        }
+        VariableType var_type = get_variable_type(string(v_type));
+
+        if (var_type == VariableType::INVALID_VAR_TYPE) {
+            return INVALID_LINE;
+        }
+
+        char gcp_var_type[50];
+        if (var_type == VariableType::INPUT || var_type == VariableType::WEIGHT ||var_type == VariableType::EXP_OUTPUT) {
+            strcpy(gcp_var_type, "input");
+        } else {
+            strcpy(gcp_var_type, "intvar");
+        }
+        cout << "B" << endl;
+        char *v_name = strtok(NULL, " ");
+        if (v_name == NULL) {
+            return INVALID_VAR_NAME;
+        }
+
+        // The line should be over now
+        if (strtok(NULL, " ") != NULL) {
+            return INVALID_LINE;
+        }
+        cout << "C" << endl;
+        strcpy(gcp_line, "declare ");
+        strcat(gcp_line, gcp_var_type);
+        strcat(gcp_line, " ");
+        strcat(gcp_line, v_name);
+        cout << "gcp line: " << gcp_line << endl;
+        return DUPLICATE_SUCCESS_DECLARE;
+        // null terminator?
+    }
+
+    return INVALID_LINE;
 }
