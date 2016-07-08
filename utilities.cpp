@@ -15,6 +15,9 @@ InstructionType get_instruction_type(const string &inst_type) {
     if (inst_type.compare("define") == 0) {
         return InstructionType::DEFINE;
     } 
+    if (inst_type.compare("declare_vector") == 0) {
+        return InstructionType::DECLARE_VECTOR;
+    }
     
     return InstructionType::INVALID_INST;
 }
@@ -52,6 +55,15 @@ OperationType get_operation_type(const string &oper) {
     if (oper.compare("mul") == 0) {
         return OperationType::MUL;
     }
+    if (oper.compare("dot") == 0) {
+        return OperationType::DOT;
+    }
+    if (oper.compare("logistic") == 0) {
+        return OperationType::LOGISTIC;
+    } 
+    if (oper.compare("deriv_logistic") == 0) {
+        return OperationType::DERIV_LOGISTIC;
+    }
 
     return OperationType::INVALID_OPERATION;
 }
@@ -65,6 +77,23 @@ bool is_constant(const string& name) {
 
     try {
         f = stof(name, &size);
+    } catch(const exception& e) {
+        return false;
+    }
+
+    if (size == name.length()) {
+        return true;
+    }
+
+    return false;
+}
+
+bool is_int(const string& name) {
+    size_t size;
+    int i;
+
+    try {
+        i = stoi(name, &size);
     } catch(const exception& e) {
         return false;
     }

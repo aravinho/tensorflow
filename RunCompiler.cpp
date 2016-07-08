@@ -13,14 +13,17 @@
 
  
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
+    /*if (argc != 3) {
         cerr << "Must provide two arguments, a Shape Program file name and a GCP file name." << endl;
         return -1;
     }
 
     Compiler c;
     c.compile(string(argv[1]), string(argv[2]));
-    
+    */
+
+    Compiler c;
+    c.compile_pass_one("test_shape.tf", "test_exp_shape.tf");
     
     return 0;
 }

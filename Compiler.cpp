@@ -2,6 +2,7 @@
 #include <fstream>
 #include <string>
 #include <list>
+#include <stdio.h>
 
 #include "Compiler.h"
 #include "utilities.h"
@@ -20,12 +21,255 @@ using namespace std;
 
 Compiler::Compiler() {
     dfg = new DataFlowGraph();
+    vector_dimensions = new unordered_map<string, int> ();
+
 }
 
 
 /* ---------------- Main Methods -------------- */
 
-int Compiler::compile(const string& shape_prog_filename, const string& gcp_filename) {
+
+
+
+int Compiler::expand_shape_line(char expanded_shape_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH], char shape_line[]) {
+
+    if (shape_line == NULL || expanded_shape_lines == NULL) {
+        return OTHER_ERROR;
+    }
+
+    if (strcmp(shape_line, "") == 0) {
+        return 0;
+    }
+
+    cout << "in esl, line: " << shape_line << endl;
+
+    // store a copy of the Shape Program line, because it is about to be mangled by strtok
+    char shape_line_copy[MAX_LINE_LENGTH];
+    //cout << "here" << endl;
+    strcpy(shape_line_copy, shape_line);
+
+
+
+
+    // determine instruction type
+    char *first_token = strtok(shape_line, " ");
+    if (first_token == NULL) {
+        return INVALID_LINE;
+    }
+    InstructionType inst_type = get_instruction_type(string(first_token));
+    if (inst_type == InstructionType::INVALID_INST) {
+        return INVALID_LINE;
+    }
+
+
+    if (inst_type == InstructionType::DECLARE_VECTOR) {
+        cout << "is declare vector" << endl;
+        // grab the type of this vector
+        char *v_type = strtok(NULL, " ");
+        if (v_type == NULL) {
+            return INVALID_LINE;
+        }
+        VariableType var_type = get_variable_type(string(v_type));
+        if (var_type == VariableType::INVALID_VAR_TYPE) {
+            cout << "invalid var type: " << v_type << endl;
+            return INVALID_LINE;
+        }
+        cout << "type: " << v_type << endl;
+        // grab the name of the vector
+        char *v_name = strtok(NULL, " ");
+        if (v_name == NULL) {
+            return INVALID_LINE;
+        }
+        if (invalid_var_name(string(v_name))) {
+            return INVALID_VAR_NAME;
+        }
+        string var_name(v_name);
+        cout << "name: " << var_name << endl;
+        // grab the size of the vector
+        char *vec_size = strtok(NULL, " ");
+        if (vec_size == NULL) {
+            return INVALID_LINE;
+        }
+        if (!is_int(string(vec_size))) {
+            return INVALID_LINE;
+        }
+        int vector_size = stoi(string(vec_size));
+        cout << "type: " << v_type << ", name: " << var_name << ", size: " << vec_size << endl;
+
+        // do nothing if the vector size is 0
+        if (vector_size == 0) {
+            return 0;
+        }
+
+        // copy expanded declaration lines into expanded_shape_lines
+        for (int i = 0; i < vector_size; i++) {
+            sprintf(expanded_shape_lines[i], "declare %s %s.%d", v_type, v_name, i);
+        }
+
+        vector_dimensions->insert(make_pair(var_name, vector_size));
+        return vector_size;
+
+    }
+
+
+
+    else if (inst_type == InstructionType::DEFINE) {
+
+        // grab the name of the variable being defined as a dot product
+        char *v_name = strtok(NULL, " ");
+        if (v_name == NULL) {
+            return INVALID_LINE;
+        }
+        if (invalid_var_name(string(v_name))) {
+            return INVALID_VAR_NAME;
+        }
+        string var_name(v_name);
+
+
+        // determine whether or not the instruction is a dot product operation
+        char *equal_sign = strtok(NULL, " ");
+        if (equal_sign == NULL) {
+            return INVALID_LINE;
+        }
+        char *after_equal = strtok(NULL, " ");
+        if (after_equal == NULL) {
+            return INVALID_LINE;
+        }
+        // if the line is not a dot product operation, end here
+        if (strcmp(after_equal, "dot") != 0) {
+            strcpy(expanded_shape_lines[0], shape_line_copy);
+            return 1;
+        }
+
+        
+        // now we know the line is a dot product line
+        char *vec1 = strtok(NULL, " ");
+        if (vec1 == NULL) {
+            return INVALID_LINE;
+        }
+        char *vec2 = strtok(NULL, " ");
+        if (vec2 == NULL) {
+            return INVALID_LINE;
+        }
+
+        // both of the operands must be previously declared vectors
+        if (vector_dimensions->count(string(vec1)) == 0 || vector_dimensions->count(string(vec2)) == 0) {
+            return INVALID_LINE;
+        }
+        // both the operand vectors must have the same dimension
+        if (vector_dimensions->at(string(vec1)) != vector_dimensions->at(string(vec2))) {
+            return INVALID_LINE;
+        }
+        // grab the dimension
+        int dimension = vector_dimensions->at(string(vec1));
+
+        //cout << "dimension: " << dimension << endl << endl;
+
+        // declare and define intvars for all the component-wise multiplications
+        for (int i = 0; i < dimension; i++) {
+            sprintf(expanded_shape_lines[2 * i], "declare intvar %s.%d", v_name, i);
+            cout << expanded_shape_lines[2 * i] << endl;
+            sprintf(expanded_shape_lines[2 * i + 1], "define %s.%d = mul %s.%d %s.%d", v_name, i, vec1, i, vec2, i);
+            cout << expanded_shape_lines[2 * i + 1] << endl << endl;
+        }
+
+        // if the operand vectors' dimension is 1, the dot product is equal to the single component-wise product
+        if (dimension == 1) {
+            sprintf(expanded_shape_lines[2], "define %s = add %s.0 0", v_name, v_name);
+            return 3;
+        }
+
+        // accumulate the sum of all the component-wise products
+        for (int j = 0; j < (dimension - 1); j++) {
+            sprintf(expanded_shape_lines[2 * j + 2 * dimension], "declare intvar %s.%d", v_name, dimension + j);
+            cout << "line index = " << 2 * j + 2 * dimension << ":       " << expanded_shape_lines[2 * j + 2 * dimension] << endl;
+            if (j == 0) {
+
+                sprintf(expanded_shape_lines[2 * j + 2 * dimension + 1], "define %s.%d = add %s.%d %s.%d", v_name, dimension + j, v_name, 0, v_name, 1);
+                cout << "j == 0, line # is " << 2 * j + 2 * dimension + 1 << ":     " << expanded_shape_lines[2 * j + 2 * dimension + 1] << endl; 
+            } else {
+                sprintf(expanded_shape_lines[2 * j + 2 * dimension + 1], "define %s.%d = add %s.%d %s.%d", v_name, dimension + j, v_name, dimension + j - 1, v_name, j + 1);
+                cout << "j == 1, line # is " << 2 * j + 2 * dimension + 1 << ":     " << expanded_shape_lines[2 * j + 2 * dimension + 1] << endl; 
+            }
+            
+        }
+
+        // define the value of the final dot product
+        sprintf(expanded_shape_lines[4 * dimension - 2], "define %s = add %s.%d 0", v_name, v_name, 2 * dimension - 2);
+        cout << "line index = " << 4 * dimension - 2 << ":      " << expanded_shape_lines[4 * dimension - 2] << endl;
+        return (4 * dimension - 1);
+
+
+        
+    }
+
+
+    else if (inst_type == InstructionType::DECLARE) {
+        strcpy(expanded_shape_lines[0], shape_line_copy);
+        return 1;
+    }
+
+    return INVALID_LINE;
+}
+
+
+ // phase 1
+    // get line, if simple, copy into temp file
+    // if vector declaration, break into multiple declarataion lines
+    // if define dot, break up into multiple muls then cascading adds
+    // if define logistic, leave for now 
+int Compiler::compile_pass_one(const string& shape_prog_filename, const string& expanded_shape_prog_filename) {
+
+    if (invalid_file_name(shape_prog_filename)) {
+        cerr << "Invalid Shape Program file name." << endl;
+        return OTHER_ERROR;
+    }
+
+    ifstream shape_prog(shape_prog_filename);
+    ofstream exp_shape_prog(expanded_shape_prog_filename);
+
+    // buffer into which we read a line from the file
+    char shape_line[MAX_LINE_LENGTH];
+
+    // array of buffers to hold the expanded lines
+    char expanded_shape_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH];
+
+    // indicates how many lines were generated from a given line in the Shape Program.
+    // 1 if no expansion was necessary, -1 if the Shape Program line was invalid.
+    int num_lines_expanded;
+
+    while(!shape_prog.eof())
+    {
+        shape_prog.getline(shape_line, MAX_LINE_LENGTH);
+        //cout << "line: " << shape_line << endl;
+
+        num_lines_expanded = expand_shape_line(expanded_shape_lines, shape_line);
+
+        if (num_lines_expanded < 0) {
+            return INVALID_LINE;
+        }
+
+        //cout << endl << endl << endl;
+        for (int i = 0; i < num_lines_expanded; i++) {
+            //cout << expanded_shape_lines[i] << endl;
+            exp_shape_prog.write(expanded_shape_lines[i], strlen(expanded_shape_lines[i]));
+            exp_shape_prog.write("\n", 1);
+        }
+
+        exp_shape_prog.write("\n", 1);
+
+    }
+
+    shape_prog.close();
+    exp_shape_prog.close();
+
+    return 0;
+
+}
+
+
+
+int Compiler::compile_pass_two(const string& shape_prog_filename, const string& gcp_filename) {
 
     if (invalid_file_name(shape_prog_filename)) {
         cerr << "Invalid Shape Program file name." << endl;
@@ -214,6 +458,11 @@ int Compiler::parse_line(char line[]) {
         if (equal_sign == NULL) {
             return INVALID_LINE;
         }
+
+        // over here grab token after equals. add cases for if it's a constant or another variable name
+        
+
+
         char *op = strtok(NULL, " ");
         if (op == NULL) {
             return INVALID_LINE;
@@ -224,11 +473,22 @@ int Compiler::parse_line(char line[]) {
         }
         node->set_operation(operation);
 
+        char *op1 = strtok(NULL, " ");
+        if (!op1) return INVALID_LINE;
+        string operand_1 = string(op1);
 
-        string operand_1 = string(strtok(NULL, " "));
-        string operand_2 = string(strtok(NULL, " "));
+        bool success;
 
-        bool success = dfg->add_flow_edge(operand_1, var_name);
+        if (operation == OperationType::LOGISTIC) {
+            success = dfg->add_flow_edge(operand_1, var_name);
+            return success;
+        }
+
+        char *op2 = strtok(NULL, " ");
+        if (!op2) return INVALID_LINE;
+        string operand_2 = string(op2);
+
+        success = dfg->add_flow_edge(operand_1, var_name);
         success = success && dfg->add_flow_edge(operand_2, var_name);
         return success;
     }
@@ -353,6 +613,9 @@ void define_child_one_partial(Node *node, ofstream &gcp, string child_one_partia
         else {
             strcat(line, node->get_child_two_name().c_str());
         }
+    } else if (node->get_operation() == OperationType::LOGISTIC) {
+        strcat(line, "deriv_logistic ");
+        strcat(line, node->get_child_one_name().c_str());
     }
 
     gcp.write(line, strlen(line));
@@ -380,6 +643,9 @@ void define_child_two_partial(Node *node, ofstream &gcp, string child_two_partia
         else {
             strcat(line, node->get_child_one_name().c_str());
         }
+    } else if (node->get_operation() == OperationType::LOGISTIC) {
+        strcat(line, "deriv_logistic ");
+        strcat(line, node->get_child_two_name().c_str());
     }
 
     gcp.write(line, strlen(line));

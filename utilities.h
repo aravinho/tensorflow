@@ -11,6 +11,7 @@ using namespace std;
 #define MAX_LINE_LENGTH 1000
 #define MAX_SHAPE_PROG_VAR_NAME_LENGTH 80
 #define MAX_GCP_VAR_NAME_LENGTH 200
+#define MAX_EXPANSION_FACTOR 1000
 
 #define INVALID_LINE -1
 #define INVALID_VAR_NAME -2
@@ -38,6 +39,7 @@ using namespace std;
  */
 enum class InstructionType {
     DECLARE,
+    DECLARE_VECTOR,
     DEFINE,
     INVALID_INST
 };
@@ -61,6 +63,9 @@ enum class VariableType {
 enum class OperationType {
     ADD,
     MUL,
+    DOT,
+    LOGISTIC,
+    DERIV_LOGISTIC,
     INVALID_OPERATION
 };
 
@@ -75,10 +80,15 @@ OperationType get_operation_type(const string &oper);
 
 /* ------------------------- Assorted Helper Methods ------------------- */
 
-/* Returns true if the given string cannot be parsed as a float.
+/* Returns true if the given string can be parsed as a float.
  * The try-catch block is because the stof method throws an exception if the string cannot be parsed as a float.
  */
 bool is_constant(const string& name);
+
+/* Returns true if the given string can be parsed as an int.
+ * This is used in declare_vector instructions by the first pass of the compiler.
+ */
+bool is_int(const string& name);
 
 /* Returns true if there is no file with the given filename.
  */

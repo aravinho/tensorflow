@@ -13,6 +13,7 @@ using namespace std;
 class Interpreter {
 	BindingsDictionary bindings;
 	unordered_map<string, VariableType>* var_types;
+	unordered_map<string, int>* vector_dimensions;
 
 public:
 
@@ -59,6 +60,18 @@ public:
  * If the given operation is invalid, returns FLT_MIN.
  */
 float apply_operation(OperationType operation, float operand1, float operand2);
+
+/* Applies the given unary operation to the given operand and returns the resulting value.
+ * This function is typically used for logistic or logistic-derivative operations.
+ *
+ * If the operand is FLT_MIN or the operation is invalid, returns FLT_MIN.
+ * If the operand is FLT_MAX, returns FLT_MAX.
+ */
+float apply_unary_operation(OperationType operation, float operand);
+
+/* Returns the dot product of the two vectors represented as arrays.
+ */
+float apply_dot_product(float vec1[], float vec2[], int length);
 
 
 
