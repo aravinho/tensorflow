@@ -7,6 +7,12 @@ interpreter: utilities.o Interpreter.o BindingsDictionary.o RunInterpreter.o
 weighteval: utilities.o BindingsDictionary.o Interpreter.o GradientDescent.o
 	g++ utilities.o BindingsDictionary.o Interpreter.o GradientDescent.o -o weighteval
 
+preprocessor: Preprocessor.o utilities.o
+	g++ Preprocessor.o utilities.o -o preprocessor
+
+Preprocessor.o: Preprocessor.cpp Preprocessor.h utilities.h
+	g++ -c -std=c++11 Preprocessor.cpp
+
 RunCompiler.o: RunCompiler.cpp
 	g++ -c -std=c++11 RunCompiler.cpp
 

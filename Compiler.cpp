@@ -28,6 +28,254 @@ Compiler::Compiler() {
 
 /* ---------------- Main Methods -------------- */
 
+int tokenize_line(char shape_line[], char *tokens[]) {
+
+    if (shape_line == NULL || tokens == NULL) return OTHER_ERROR;
+    if (strcmp(shape_line, "") == 0) return 0;
+
+    char *next_token;
+    int num_tokens = 0;
+
+    // grab the first token and copy it into the tokens array
+    next_token = strtok(shape_line, " ");
+    if (!next_token) return INVALID_LINE;
+    strcpy(tokens[num_tokens], num_tokens);
+    num_tokens++;
+
+    // grab as many subsequent tokens as there are and copy them into the tokens array
+    while (next_token != NULL) {
+        next_token = strtok(NULL, " ");
+        strcpy(tokens[num_tokens], num_tokens);
+        num_tokens++;
+    }
+
+    return num_tokens;
+}
+
+int Compiler::is_valid_declare_line(char *tokens[], int num_tokens) {
+    if (!tokens) return OTHER_ERROR;
+    if (num_tokens != 3) return INVALID_LINE;
+    if (tokens[0] == NULL || tokens[1] == NULL || tokens[2] == NULL) return OTHER_ERROR;
+
+    if (strcmp(tokens[0], "declare") != 0) return INVALID_LINE;
+    if (get_variable_type(tokens[1]) == VariableType::INVALID_VAR_TYPE) return INVALID_VAR_TYPE;
+    if (!is_valid_var_name(string(tokens[2]))) return INVALID_VAR_NAME;
+
+    return 0;
+}
+
+int Compiler::is_valid_declare_vector_line(char *tokens[], int num_tokens) {
+
+    if (!tokens) return OTHER_ERROR;
+    if (num_tokens != 3) return INVALID_LINE;
+    if (tokens[0] == NULL || tokens[1] == NULL || tokens[2] == NULL) return OTHER_ERROR;    
+
+    if (strcmp(tokens[0], "declare_vector") != 0) return INVALID_LINE;
+    if (get_variable_type(tokens[1]) == VariableType::INVALID_VAR_TYPE) return INVALID_VAR_TYPE;
+    if (!is_valid_var_name(string(tokens[2]))) return INVALID_VAR_NAME;
+
+    return 0;
+
+}
+
+int Compiler::is_valid_define_line(char *tokens[], int num_tokens) {
+
+    if (!tokens) return OTHER_ERROR;
+    if (num_tokens < 4 || num_tokens > 6) return INVALID_LINE;
+    if (tokens[0] == NULL || tokens[1] == NULL || tokens[2] == NULL || tokens[3] == NULL) return OTHER_ERROR;
+
+    string first_token(tokens[0]);
+    string second_token(tokens[1]);
+    string third_token(tokens[2]);
+
+    // every define instruction resembles "define <var_name> = ..."
+    if (first_token.compare("define") != 0 || !is_valid_var_name(second_token) || third_token.compare("=") != 0)
+        return INVALID_LINE;
+
+    string fourth_token(tokens[3]);
+    if (num_tokens >= 5) string fifth_token(tokens[4]);
+    if (num_tokens >= 6) string sixth_token(tokens[5]);
+
+    bool valid;
+
+    // a variable could be defined as a constant
+    if (is_constant(fourth_token)) {
+        valid = num_tokens == 4;
+        return (valid ? 0 : INVALID_LINE);
+    }
+
+    // a variable could be defined as an operation of 1 or 2 constants/variables
+    // it could also be defined as an operation of two vectors, or a vector and a constant
+    if (is_valid_operation(fourth_token)) {
+        
+        if (is_binary_operation(fourth_token)) {
+            valid = num_tokens == 6;
+            valid = valid && (is_constant(fifth_token) || is_valid_var_name(fifth_token));
+            valid = valid && (is_constant(sixth_token) || is_valid_var_name(sixth_token))
+            return (valid ? 0 : INVALID_LINE);
+        }
+
+        else if (is_unary_operation(fourth_token)) {
+            valid num_tokens == 5 && (is_constant(fourth_token) || is_valid_var_name(fourth_token));
+            return (valid ? 0 : INVALID_LINE);
+        }
+
+        else if (is_binary_vector_operation(fourth_token)) {
+            valid = num_tokens == 6 && is_valid_var_name(fifth_token) && is_valid_var_name(sixth_token);
+            return (valid ? 0 : INVALID_LINE);
+        }
+
+        else if (is_unary_vector_operation(fourth_token)) {
+            valid = num_tokens == 6 && is_valid_var_name(fifth_token);
+            valid = valid && (is_constant(sixth_token) || is_valid_var_name(sixth_token));
+            return (valid ? 0 : INVALID_LINE);
+        }
+
+        else return INVALID_LINE;
+
+
+    }
+
+    // a variable could be defined as equivalent to another variable
+    if (is_valid_var_name(fourth_token)) {
+        valid = num_tokens == 4 && strcmp(fourth_token, second_token) != 0;
+        return (valid ? 0 : INVALID_LINE);
+    }
+
+    // a variable could be defined as a user-given operation of 1 or 2 constants/variables
+    // user-defined vector operations are not allowed
+    if (is_valid_macro(fourth_token)) {
+
+        if (is_binary_macro(fourth_token)) {
+            valid = num_tokens == 6;
+            valid = valid && (is_constant(fifth_token) || is_valid_var_name(fifth_token));
+            valid = valid && (is_constant(sixth_token) || is_valid_var_name(sixth_token))
+            return (valid ? 0 : INVALID_LINE);
+        }
+
+        else if (is_unary_macro(fourth_token)) {
+            valid num_tokens == 5 && (is_constant(fourth_token) || is_valid_var_name(fourth_token));
+            return (valid ? 0 : INVALID_LINE);
+        }
+
+        else return INVALID_LINE;
+    }
+
+    return INVALID_LINE;
+
+}
+
+int Compiler::expand_shape_line(char expanded_shape_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH], char shape_line[]) {
+
+    // edge error cases
+    if (shape_line == NULL || expanded_shape_lines == NULL) return OTHER_ERROR;
+    if (strcmp(shape_line, "") == 0) return 0;
+
+
+    // store a copy of the Shape Program line, because it is about to be mangled by strtok
+    char shape_line_copy[MAX_LINE_LENGTH];
+    strcpy(shape_line_copy, shape_line);
+
+    // tokenize the line
+    char *tokens[MAX_NUM_TOKENS];
+    int num_tokens = tokenize_line(shape_line, char *tokens[]);
+    if (num_tokens < 0) return INVALID_LINE;
+
+    // grab the instruction type, and act accordingly
+    InstructionType inst_type = get_instruction_type(string(tokens[0]));
+    if (inst_type == InstructionType::INVALID_INST) return INVALID_LINE;
+
+
+
+    // declare instructions need no expanding
+    // define instructions need expanding if they involve macros or vector operations
+    // declare_vector instructions always need expanding into their components
+
+    if (inst_type == InstructionType::DECLARE) {
+        // verify the line is a valid DECLARE instruction
+        int valid_declare_line = is_valid_declare_line(tokens, num_tokens);
+        if (valid_declare_line < 0) return valid_declare_line;
+
+        // copy the line directly. It needs no expanding
+        strcpy(expanded_shape_lines[0], shape_line_copy);
+        return 1;
+    }
+    
+    else if (inst_type = InstructionType::DEFINE) {
+        // verify the line is a valid DEFINE instruction
+        int valid_define_line = is_valid_define_line(tokens, num_tokens);
+        if (valid_define_line < 0) return valid_define_line;
+
+        // expand the line
+        int num_lines = expand_define_instruction(tokens, num_tokens, expanded_shape_lines);
+        return num_lines;
+    }
+    
+    else if (inst_type == InstructionType::DECLARE_VECTOR) {
+        // verify the line is a valid DECLARE_VECTOR instruction
+        int valid_declare_vector_line = is_valid_declare_vector_line(tokens, num_tokens);
+        if (valid_declare_vector_line < 0) return valid_declare_vector_line;
+
+        // write the expanded component declarations into expanded_shape_lines
+        // grab the size of the array from the return value of expand_declare_vector_instruction
+        int vector_size = expand_declare_vector_instruction(tokens, expanded_shape_lines);
+
+        // do nothing for zero-length vectors
+        if (vector_size == 0) return 0;
+
+        // note the dimension of this vector
+        vector_dimensions->insert(make_pair(var_name, vector_size));
+        // the number of expanded lines is precisely the dimension of the vector (one line per component)
+        return vector_size;
+
+    }
+
+    else return INVALID_LINE;
+
+}
+
+int expand_declare_vector_instruction(char *tokens[], char expanded_shape_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH]) {
+    char *vec_type = tokens[1], *vec_name = tokens[2];
+    int vec_size = stoi(tokens[3]);
+        
+    // copy expanded declaration lines into expanded_shape_lines
+    for (int i = 0; i < vec_size; i++) {
+        sprintf(expanded_shape_lines[i], "declare %s %s.%d", vec_type, vec_name, i);
+    }
+
+    return vec;    
+}
+
+
+int expand_define_instruction(char *tokens[], int num_tokens, char expanded_shape_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH]) {
+
+    char *var_name = tokens[1];
+    string operation(tokens[3]);
+
+    if (is_vector_operation(operation)) {
+
+        OperationType vec_oper = get_instruction_type(operation);
+        string operand1(tokens[4]);
+        string operand2(tokens[5]);
+        expand_vector_instruction(vec_oper, operand1, operand2, expanded_shape_lines);
+
+    }
+
+    if (is_macro(string(operation))) {
+
+        if (num_tokens == 5) {
+            string operand(tokens[4]);
+            expand_unary_macro(operation, operand);
+        }
+        if (num_tokens == 6) {
+            string operand1(tokens[4]);
+            string operand2(tokens[5]);
+            expand_binary_macro(operation, operand1, operand2);
+        }
+
+    }
+
+}
 
 
 
@@ -80,7 +328,7 @@ int Compiler::expand_shape_line(char expanded_shape_lines[MAX_EXPANSION_FACTOR][
         if (v_name == NULL) {
             return INVALID_LINE;
         }
-        if (invalid_var_name(string(v_name))) {
+        if (!is_valid_var_name(string(v_name))) {
             return INVALID_VAR_NAME;
         }
         string var_name(v_name);
@@ -120,7 +368,7 @@ int Compiler::expand_shape_line(char expanded_shape_lines[MAX_EXPANSION_FACTOR][
         if (v_name == NULL) {
             return INVALID_LINE;
         }
-        if (invalid_var_name(string(v_name))) {
+        if (!is_valid_var_name(string(v_name))) {
             return INVALID_VAR_NAME;
         }
         string var_name(v_name);
@@ -424,7 +672,7 @@ int Compiler::parse_line(char line[]) {
             return INVALID_LINE;
         }
         var_name = string(v_name);
-        if (invalid_var_name(var_name)) {
+        if (!is_valid_var_name(var_name)) {
             return INVALID_VAR_NAME;
         }
 
@@ -445,7 +693,7 @@ int Compiler::parse_line(char line[]) {
             return INVALID_LINE;
         }
         var_name = string(v_name);
-        if (invalid_var_name(var_name)) {
+        if (!is_valid_var_name(var_name)) {
             return INVALID_VAR_NAME;
         }
 

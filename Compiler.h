@@ -7,6 +7,9 @@
 
 using namespace std;
 
+/* These delimiters separate tokens in a line of TenFlang code. 
+ */
+const char delimiters[3] = " \t";
 
 /* The purpose of compilation is to translate the Shape Program into the Gradient Computing Program (GCP).
  * Compilation occurs in these three steps:
@@ -115,6 +118,49 @@ public:
      */
     int duplicate_line_for_gcp(char shape_line[], char gcp_line[]);
 
+    /* Determines whether the given tokens form a valid DECLARE instruction.
+     * In order to be valid, there must be exactly 3 tokens.
+     * The first must be the word "declare", the second a valid variable type, and the third a valid variable name.
+     * See the invalid_var_name function in utilities.h for what constitutes a valid variable name.
+     * Note that we do not check whether a variable name has previously been defined in the program????
+     * This error will be caught during the second phase of compilation/interpretation???
+     *
+     * Returns 0 if the instruction is valid, or an error code otherwise (see utilities.h).
+     */
+    int is_valid_declare_line(char *tokens[], int num_tokens);
+
+    /* Determines whether the given tokens form a valid DEFINE instruction.
+     * In order to be valid, there must be exactly 4 tokens.
+     * The first must be the word "declare_vector" and the second a valid variable type.
+     * The third must be a valid variable name and the fourth an int (the dimension of the vector).
+     * The size of the vector cannot exceed MAX_VECTOR_SIZE (defined in utilities.h).
+     * See the invalid_var_name function in utilities.h for what constitutes a valid variable name.
+     *
+     * Returns 0 if the instruction is valid, or an error code otherwise (see utilities.h).
+     */
+    int is_valid_declare_vector_line(char *tokens[], int num_tokens);
+
+    /* Determines whether the given tokens form a valid DEFINE instruction.
+     * Every DEFINE instruction begins with "define <var_name> = "
+     * A variable can be defined in one of four ways:
+     *
+     * 1. "define <var_name> = <primitive_operation> <operand 1> <operand 2>"
+     *  - the operation could be binary or unary and the operands could be other variables or constants
+     *  - the operation could be a vector operation. We do not check here whether "var_name" or the operands are actually vectors?????
+     *
+     * 2. "define <var_name> = <user-defined macro operation> <operand 1> <operand 2>"
+     *  - the same rules apply as for primitive operations
+     *  - additionally, the macro name must be a valid macro previously defined
+     *
+     * 3. "define <var_name> = <constant>"
+     * 
+     * 4. "define <var_name> = <another variable with a different name>"
+     *
+     * 
+     * This method returns 0 if the instruction is valid, or an error code otherwise (see utilities.h)
+     */
+    int is_valid_define_line(char *tokens[], int num_tokens);
+
 };
 
 
@@ -154,6 +200,17 @@ string declare_child_two_partial(Node *node, ofstream &gcp);
  */
 void define_child_one_partial(Node *node, ofstream &gcp, string child_one_partial);
 void define_child_two_partial(Node *node, ofstream &gcp, string child_two_partial);
+
+/* Populates the tokens array with the tokens of shape_line.
+ * Tokens are delimited by a space or a tab.
+ * Returns the number of tokens, or an error code on failure (see utilities.h).
+ *
+ * This function uses the strtok method to tokenize.
+ * As a result, the shape_line char-pointer is mangled during the execution of this function.
+ */
+int tokenize_line(char shape_line[], char *tokens[]);
+
+
 
 
 
