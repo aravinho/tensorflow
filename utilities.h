@@ -12,7 +12,7 @@ using namespace std;
 #define MAX_SHAPE_PROG_VAR_NAME_LENGTH 80
 #define MAX_GCP_VAR_NAME_LENGTH 200
 #define MAX_EXPANSION_FACTOR 1000
-#define MAX_NUM_TOKENS 10
+#define MAX_NUM_TOKENS 100
 #define MAX_VECTOR_SIZE 1000
 
 #define INVALID_LINE -1
@@ -158,6 +158,12 @@ bool is_valid_vector_size(int size);
  * Macro names can be anything other than the names of primitive/vector operations.
  */
 bool is_valid_macro_name(const string& name);
+
+/* Returns true if the given word is a keyword.
+ * A keyword is the name of an instruction, the name of an operation,
+ *  the name of a variable type, or the equals sign.
+ */
+bool is_keyword(const string& word);
 
 
 #endif

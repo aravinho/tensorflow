@@ -13,6 +13,7 @@ using namespace std;
  */
 const char delimiters[3] = " \t";
 
+/* Represents a user-defined macro. */
 struct macro {
 	string name;
 	int num_lines;
@@ -21,12 +22,31 @@ struct macro {
 	string operand1;
 	string operand2;
 	vector<string> *lines;
+	int num_references;
 };
 
 
-class Preprocessor {
 
-	
+/* The Preprocessor serves three main functions:
+ * 1. Parse user-defined macros
+ * 2. Expand a TenFlang program into primitive operations
+ * 3. Ensure there are no errors in the program
+ *
+ * The Preprocessor iterates over all the lines in the TenFlang program.
+ * If a line is a definition of a user-defined macro, it is parsed (see parse_macro_line).
+ * Otherwise, the Preprocessor makes sure the line is a valid, legal instruction, and expands it if necessary.
+ *
+ * Lines that require expansions are:
+ *	- lines involving vector operations
+ *	- lines involving vector operations
+ *	- lines involving user-defined macros
+ *
+ * The Preprocessor is used before a TenFlang program can be compiled or interpreted.
+ * This is so that the compiler/interpreter only need deal with simple primitives.
+ * After the Preprocessor expands the program, it writes the expanded program to a temp file.
+ * This program that can be easily compiled or interpreted.
+ */
+class Preprocessor {
 
 public:
 	/* Maps variable names to their types. */
@@ -38,15 +58,22 @@ public:
 	/* A set of which variables have been defined. */
 	unordered_set<string> *defined_variables;
 	/* Maps macro names to their definitions. */
-	unordered_map<string, struct macro>* macros;
+	unordered_map<string, struct macro*>* macros;
 
-	/* Theis boolean is used to ensure all the macro definitions occur at the top. */
+	/* This boolean is used to ensure all the macro definitions occur at the top. */
 	bool macros_done;
+
+
 
 	/* Constructor.
      * Initializes the instance variables.
      */
     Preprocessor();
+
+
+    /* ------------------------------------- Main Methods -------------------------------------- */
+
+
 
 	/* Before a program can be compiled or interpreted, it must be expanded.
 	 * The preprocessor expands a program by breaking complex instructions into simpler primitives.
@@ -70,25 +97,228 @@ public:
      * "define dot_prod.2 = mul a.2 b.2"
      * "define dot_prod = add dot_prod.1 dot_prod.2"
      *
+     * Additionally, if a line is the definition of a user macro, parse_macro_line is called to parse and store this macro.
+     *
      * This method reads from the Program, and writes to an Expanded Program file.
-     * The second pass will then compile the GCP from the Expanded Shape Program.
+     * The Expanded Shape Program can now be compiled or interpreted.
      *
      * Returns 0 on success, and the appropriate error code otherwise (see utilities.h).
      */
     int expand_program(const string& shape_prog_filename, const string& expanded_shape_prog_filename);
 
-
-    /* Populates the expanded_prog_lines array with the appropriate expansion of prog_line.
+    /* Populates the expanded_prog_lines vector with the appropriate expansion of prog_line.
      * See the comment for the expand_program for details on what "expansion" entails.
      * If no expansion is needed, then the line is copied directly into the zeroth string of the expanded_prog_lines array.
      *
-     * Returns the number of lines copied into expanded_prog_lines_array.
+     * Returns the number of lines copied into expanded_prog_lines.
      * This is 1 if no expansion was needed, and the appropriate error code (see utilities.h) if the given line was invalid.
      * Returns 0 if prog_line is an empty line.
      */
-    int expand_line(char expanded_prog_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH], char prog_line[]); 
+    int expand_line(vector<string> *expanded_prog_lines, char prog_line[]); 
 
 
+
+    /* ---------------------------------- Main Expansion Methods ----------------------------------- */
+
+
+
+     /* Expands a DECLARE_VECTOR instruction, copying the expanded lines into EXPANDED_PROG_LINES.
+     * The declare_vector instruction gets broken down into as many regular declare instructions as there are elements in the vector.
+     *
+     * ex. "declare_vector input x[3]" becomes:
+     * "declare input x.1"
+     * "declare input x.2"
+     * "declare input x.3"
+     *
+     * This method returns the dimension of the vector, which will always be a positive integer.
+     */
+    int expand_declare_vector_instruction(char *tokens[], vector<string> *expanded_prog_lines);
+
+    /* Expands a DEFINE instruction, copying the expanded lines into EXPANDED_PROG_LINES.
+     * DEFINE instructions need expanding if they involve vector operations or user-defined macros.
+     * Vector operations are expanded into component wise operations (see vector expansion methods below).
+     * Macro instructions are expanded directly based on the user given macro (see expand_unary_macro and expand_binary_macro).
+     *
+     * If the instruction requires no expanding, nothing is done and 0 is returned.
+     * Otherwise, this method returns the number of expanded lines.
+     */
+    int expand_define_instruction(char *tokens[], int num_tokens, vector<string> *expanded_prog_lines);
+
+    /* This method expands a DEFINE instruction that defines a variable/vector as the result of a vector operation.
+	 * RESULT is the variable/vector being defined, and OPERAND1 and OPERAND2 are the operand vectors/constants/variables.
+	 *
+	 * Based on the given OPER_TYPE, this method dispatches the work to the appropriate expansion method.
+	 * See specific vector operation expansion methods below.
+	 *
+	 * The expanded lines are written into EXPANDED_PROG_LINES.
+	 * Returns the number of expanded lines.
+	 */
+	int expand_vector_instruction(const OperationType& oper_type, const string& result, const string& operand1, const string& operand2,
+    	vector<string> *expanded_prog_lines);
+
+
+	/* ------------------------------------ Helper Macro Expansion Methods ----------------------------------- */
+
+
+
+    /* Expands a DEFINE instruction that defines a variable as the result of a user-defined unary macro (one operand).
+     * Grabs the macro struct with the given MACRO_NAME.
+     * Recall this struct was created during the parsing of the macro definitions.
+     * Replaces the current instruction with the appropriate sequence of instructions as stored in the macro struct.
+     * Replaces the dummy variable names with the given OPERAND and RESULT names.
+     * Writes the expanded instructions into EXPANDED_PROG_LINES.
+     *
+     * Returns the number of expanded lines.
+     */
+    int expand_unary_macro(const string& macro_name, const string& operand, const string& result, 
+    	vector<string> *expanded_prog_lines);
+
+    /* Does the same thing as expand_unary_macro, but for a binary macro.
+     */
+	int expand_binary_macro(const string& macro_name, const string& operand1, const string& operand2, const string& result, 
+    	vector<string> *expanded_prog_lines);
+
+	/* Replaces all the dummy variable names in DUMMY_LINE with the appropriate argument names RESULT, OPERAND1, and OPERAND2.
+	 * For example, "substitute_dummy_names('define r = mul p q', r, p, q, z, x, y)" would return 'define z = mul x y'
+	 * This method is used when expanding macros, since the dummy variables from the macro definition must be replaced with the current variables.
+	 *
+	 * The int MACRO_NUM_REFERENCES is the number of times this macro has been referenced.
+	 * This is necessary for macros that involve declaring intvars.
+	 * For example, consider the macro:
+	 *	"#macro c = my_macro a b; declare intvar foo; define foo = add a b; define c = mul foo 2;"
+	 * The first time a variable was defined as the result of a macro, say, "define m = my_macro x y",
+	 *	* the intvar foo would be expanded to foo0.
+	 * The next time, say, "define n = my_macro p q", the intvar foo would be expanded to foo1.
+	 * 
+	 * Returns the modified string with the argument names in place of the dummy names.
+	 */
+	string substitute_dummy_names(const string& dummy_line, string dummy_result, string dummy_op1, string dummy_op2,
+    	const string& result, const string& operand1, const string& operand2, int macro_num_references);
+
+	/* Helper methods to determine whether the macro with the given NAME is binary or unary. */
+	bool is_binary_macro(const string& name);
+	bool is_unary_macro(const string& name);
+
+
+	
+	/* ------------------------------------ Helper Vector Expansion Methods ----------------------------------- */
+
+
+
+	/* Expands a DEFINE instruction that defines a variable RESULT as the result of the dot product between VECTOR1 and VECTOR2.
+     * The dot product of two vectors get broken up into several multiplications and additions.
+     *
+     * ex. "define_dot dot_prod = dot a b" becomes the following: (Assume dot_prod, a and b have been declared, and a and b are both two-element vectors.)
+     * "declare dot_prod.1"
+     * "declare dot_prod.2"
+     * "define dot_prod.1 = mul a.1 b.1"
+     * "define dot_prod.2 = mul a.2 b.2"
+     * "define dot_prod = add dot_prod.1 dot_prod.2"
+     *
+     * The expanded lines are written into EXPANDED_PROG_LINES.
+     * Returns the number of expanded lines.
+     */
+	int expand_dot_product_instruction(const string& result, const string& vector1, const string& vector2, int dimension,
+    	vector<string> *expanded_prog_lines);
+
+	/* Expands a DEFINE instruction that defines a vector RESULT_VEC as the result of component-wise addition between VECTOR1 and VECTOR2.
+     * This operation gets broken up into several scalar additions.
+     *
+     * ex. "define sum_vec = component_wise_add a b" becomes the following: (Assume sum_vec, a and b have been declared, and are all two-element vectors.)
+     * "define sum_vec.1 = add a.1 b.1"
+     * "define sum_vec.2 = add a.2 b.2"
+     *
+     * The expanded lines are written into EXPANDED_PROG_LINES.
+     * Returns the number of expanded lines.
+     */
+	int expand_component_wise_add_instruction(const string& result_vec, const string& vector1, const string& vector2, int dimension, 
+    	vector<string> *expanded_prog_lines);
+
+	/* Expands a DEFINE instruction that defines a vector RESULT_VEC as the result of component-wise multiplication between VECTOR1 and VECTOR2.
+     * This operation gets broken up into several scalar multiplications.
+     *
+     * ex. "define prod_vec = component_wise_mul a b" becomes the following: (Assume prod_vec, a and b have been declared, and are all two-element vectors.)
+     * "define prod_vec.1 = mul a.1 b.1"
+     * "define prod_vec.2 = mul a.2 b.2"
+     *
+     * The expanded lines are written into EXPANDED_PROG_LINES.
+     * Returns the number of expanded lines.
+     */
+	int expand_component_wise_mul_instruction(const string& result_vec, const string& vector1, const string& vector2, int dimension, 
+    	vector<string> *expanded_prog_lines);
+
+	/* Expands a DEFINE instruction that defines a vector RESULT_VEC as the result scaling VECTOR by the given SCALING_FACTOR.
+	 * The scaling factor could be a variable or a constant.
+     * This operation gets broken up into several scalar multiplications.
+     *
+     * ex. "define scaled_vec = scale_vector a s" becomes the following:
+     * "define scaled_vec.1 = mul a.1 s"
+     * "define scaled_vec.2 = mul a.2 s"
+	 *
+     * (Assume scaled_vec and a have been declared as two-element vectors, and s has been declared and defined.)
+     *
+     * The expanded lines are written into EXPANDED_PROG_LINES.
+     * Returns the number of expanded lines.
+     */
+	int expand_scale_vector_instruction(const string& result_vec, const string& vector1, const string& scaling_factor, int dimension,
+		vector<string> *expanded_prog_lines);
+
+	/* Expands a DEFINE instruction that defines a vector RESULT_VEC as the result incrementing each component in VECTOR by the given INCREMENTING_FACTOR.
+	 * The incrementing factor could be a variable or a constant.
+     * This operation gets broken up into several scalar additions.
+     *
+     * ex. "define incr_vec = increment_vector a s" becomes the following:
+     * "define incr_vec.1 = add a.1 s"
+     * "define incr_vec.2 = add a.2 s"
+	 *
+     * (Assume incr_vec and a have been declared as two-element vectors, and s has been declared and defined.)
+     *
+     * The expanded lines are written into EXPANDED_PROG_LINES.
+     * Returns the number of expanded lines.
+     */
+	int expand_increment_vector_instruction(const string& result_vec, const string& vector1, const string& incrementing_factor, int dimension, 
+    	vector<string> *expanded_prog_lines);
+
+
+
+    /* ------------------------------- Macro Parsing Methods ----------------------------- */
+
+
+
+	/* Parses the given MACRO_LINE, and populates the given MACRO struct.
+	 * Calls parse_macro_first_line to obtain the macro name, result name, and dummy operand names for the macro.
+	 * For each subsequent line of the macro definition, parse_macro_subsequent_line is called.
+	 * These calls populate the "lines" field of the macro struct.
+	 *
+	 * The goal of parsing macro definitions is so that later in the program,
+	 * 	when a variable is defined as the result of a macro operation,
+	 *  that definition line can easily be replaced with the lines of the macro (see expand_unary_macro, expand_binary_macro).
+	 *
+	 * Returns 0 on success, or an error code if the macro definition is invalid (see utilities.h).
+	 */
+	int parse_macro_line(char macro_line[], struct macro *macro);
+
+	/* Parses the first line a macro.
+	 * Stores the name of the macro, the dummy result name, and the dummy operand names in the macro struct.
+	 * For example, "#macro z = my_macro x y" would store in the MACRO struct:
+	 *	name: my_macro, result: z, operand1: x, operand2: y, is_binary: true
+	 * 
+	 * Returns 0 on success, or an error code if the line is invalid.
+	 */
+	int parse_macro_first_line(char first_line[], struct macro *macro);
+
+	/* Parses a subsequent (not the first) line of a macro.
+	 * If the line is valid, adds it to the vector of lines in the MACRO struct.
+	 *
+	 * Returns 0 on success, or an error code if the line is invalid.
+	 */
+	int parse_macro_subsequent_line(char line[], struct macro *macro);
+
+	
+
+
+
+    /* ------------------------------ Error Checking Methods ---------------------------- */
 
 
     /* Determines whether the given tokens form a valid DECLARE instruction.
@@ -138,79 +368,24 @@ public:
      */
     int is_valid_define_line(char *tokens[], int num_tokens);
 
-    /* Expands a DECLARE_VECTOR instruction, copying the expanded lines into the EXPANDED_PROG_LINES array.
-     * The declare_vector instruction gets broken down into as many regular declare instructions as there are elements in the vector.
-     *
-     * ex. "declare_vector input x[3]" becomes:
-     * "declare input x.1"
-     * "declare input x.2"
-     * "declare input x.3"
-     *
-     * This method returns the dimension of the vector, which will always be a positive integer.
-     */
-    int expand_declare_vector_instruction(char *tokens[], char expanded_prog_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH]);
-
-    /* Expands a DEFINE instruction, copying the expanded lines into the EXPANDED_PROG_LINES array.
-     * DEFINE instructions need expanding if they involve vector operations or user-defined macros.
-     * Vector operations are expanded into component wise operations.
-     * Macro instructions are expanded directly based on the user given macro.
-     *
-     * If the instruction requires no expanding, nothing is done and 0 is returned.
-     * Otherwise, this method returns the number of expanded lines.
-     */
-    int expand_define_instruction(char *tokens[], int num_tokens, char expanded_prog_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH]);
-
-    int expand_unary_macro(const string& macro_name, const string& operand, const string& result, 
-    	char expanded_prog_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH]);
-
-
-	int expand_binary_macro(const string& macro_name, const string& operand1, const string& operand2, const string& result, 
-    	char expanded_prog_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH]);
-
-
-	int expand_vector_instruction(const OperationType& oper_type, const string& result_vec, const string& operand1, const string& operand2,
-    	char expanded_prog_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH]);
-
-	int expand_dot_product_instruction(const string& result_vec, const string& vector1, const string& vector2, int dimension,
-    char expanded_prog_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH]);
-
-	int expand_component_wise_add_instruction(const string& result_vec, const string& vec1, const string& vec2, int dimension, 
-    	char expanded_prog_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH]);
-
-	int expand_component_wise_mul_instruction(const string& result_vec, const string& vec1, const string& vec2, int dimension, 
-    	char expanded_prog_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH]);
-
-	int expand_scale_vector_instruction(const string& result_vec, const string& vec, const string& constant, int dimension, 
-    	char expanded_prog_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH]);
-
-	int expand_increment_vector_instruction(const string& result_vec, const string& vec, const string& constant, int dimension, 
-    	char expanded_prog_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH]);
-
+    /* Returns whether a macro with the given NAME has been successfully defined earlier. */
 	bool is_valid_macro(const string& name);
 
-	bool is_binary_macro(const string& name);
-
-	bool is_unary_macro(const string& name);
-
-
-	string substitute_dummy_names(const string& dummy_line, string dummy_result, string dummy_op1, string dummy_op2,
-    	const string& result, const string& operand1, const string& operand2);
-
-	int parse_macro_line(char macro_line_copy[], struct macro *macro);
-
-	int parse_macro_subsequent_line(char line[], struct macro *macro);
-
-	int parse_macro_first_line(char first_line[], struct macro *macro);
-
+	
 };
+
+
+/* -------------------------------- Tokenizing Method ----------------------------- */
 
 
 /* Populates the tokens array with the tokens of LINE.
  * Tokens are delimited by any character in the given DELIM string.
- * Returns the number of tokens, or an error code on failure (see utilities.h).
  *
  * This function uses the strtok method to tokenize.
  * As a result, the given char-pointer is mangled during the execution of this function.
+ *
+ * This function is general enough to be used in other parts of the system, such as the Compiler or Interpreter.
+ * Returns the number of tokens, or an error code on failure (see utilities.h).
  */
 int tokenize_line(char line[], char *tokens[MAX_NUM_TOKENS], const string& delim);
 

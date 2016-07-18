@@ -197,3 +197,12 @@ bool is_valid_macro_name(const string& name) {
     return get_instruction_type(name) == InstructionType::INVALID_INST;
 }
 
+
+bool is_keyword(const string& word) {
+    if (get_instruction_type(word) != InstructionType::INVALID_INST) return true;
+    if (get_variable_type(word) != VariableType::INVALID_VAR_TYPE) return true;
+    if (get_operation_type(word) != OperationType::INVALID_OPERATION) return true;
+    if (word.compare("=") == 0) return true;
+    return false;
+}
+
