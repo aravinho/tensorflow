@@ -36,31 +36,18 @@ int Preprocessor::expand_program(const string& prog_filename, const string& expa
     ofstream exp_prog(expanded_prog_filename);
 
     // buffer into which we read a line from the file
-    char prog_line[MAX_LINE_LENGTH];
-
-    // array of buffers to hold the expanded lines
-   vector<string> *expanded_prog_lines;
+    string prog_line;
 
     // indicates how many lines were generated from a given line in the Shape Program.
-    // 1 if no expansion was necessary, -1 if the Shape Program line was invalid.
+    // 1 if no expansion was necessary, 0 for an empty line, -1 if the Shape Program line was invalid.
     int num_lines_expanded;
 
+    // expand each line
     while(!prog.eof()) {
 
-        prog.getline(prog_line, MAX_LINE_LENGTH);
-        expanded_prog_lines = new vector<string>();
-        num_lines_expanded = expand_line(expanded_prog_lines, prog_line);
-
+        getline(prog, line);
+        num_lines_expanded = expand_line(prog_line, exp_prog);
         if (num_lines_expanded < 0) return num_lines_expanded;
-
-        for (int i = 0; i < num_lines_expanded; i++) {
-            exp_prog.write(expanded_prog_lines->at(i).c_str(), expanded_prog_lines->at(i).size());
-            exp_prog.write("\n", 1);
-        }
-
-        exp_prog.write("\n", 1);
-
-        delete expanded_prog_lines;
 
     }
 
@@ -72,25 +59,20 @@ int Preprocessor::expand_program(const string& prog_filename, const string& expa
 }
 
 
-int Preprocessor::expand_line(vector<string> *expanded_prog_lines, char prog_line[]) {
+int Preprocessor::expand_line(const string& prog_line, ofstream& exp_prog) {
     
     // edge error cases
-    if (prog_line == NULL || expanded_prog_lines == NULL) return OTHER_ERROR;
-    if (strcmp(prog_line, "") == 0) return 0;
-
-    // store a copy of the line, because it is about to be mangled by strtok
-    char *prog_line_copy = new char[MAX_LINE_LENGTH];
-    strcpy(prog_line_copy, prog_line);
+    if (prog_line == NULL) return OTHER_ERROR;
+    if (prog_line.compare("") == 0) return 0;
 
     // tokenize the line
-    char *tokens[MAX_NUM_TOKENS];
-    int num_tokens = tokenize_line(prog_line_copy, tokens, delimiters);
-    if (num_tokens < 0) return INVALID_LINE;
-    if (num_tokens == 0) return 0;
+    vector<string> *tokens = new vector<string>();
+    int num_tokens = tokenize_line(line, tokens, " ");
+    if (num_tokens < 3) return INVALID_LINE;
 
     // grab the instruction type, and act accordingly
-    if (!is_valid_instruction(string(tokens[0]))) return INVALID_LINE;
-    InstructionType inst_type = get_instruction_type(string(tokens[0]));
+    if (!is_valid_instruction(tokens->at(0)) return INVALID_LINE;
+    InstructionType inst_type = get_instruction_type(tokens->at(0));
 
 
     // macro instructions need to be parsed and stored, but are not written to the expanded program
@@ -124,20 +106,22 @@ int Preprocessor::expand_line(vector<string> *expanded_prog_lines, char prog_lin
 
     }
     
+    // as soon as we see a non-macro-definition, there can be no more macros
     macros_done = true;
 
     if (inst_type == InstructionType::DECLARE) {
+
         // verify the line is a valid DECLARE instruction
-        int valid_declare_line = is_valid_declare_line(tokens, num_tokens);
+        int is_valid_declare_line = is_valid_declare_line(prog_line);
         if (valid_declare_line < 0) return valid_declare_line;
 
         // copy the line directly. It needs no expanding
-        expanded_prog_lines->push_back(string(prog_line));
-        VariableType var_type = get_variable_type(string(tokens[1]));
-        string var_name(tokens[2]);
+        exp_prog << prog_line << endl;
 
         // record the type of this variable
         // if it's an input, weight or exp_output, mark it as defined
+        VariableType var_type = get_variable_type(tokens->at(1));
+        string var_name = tokens->at(2);
         variables->insert(make_pair(var_name, var_type));
         if (var_type == VariableType::INPUT || var_type == VariableType::WEIGHT || var_type == VariableType::EXP_OUTPUT)
             defined_variables->insert(var_name);
@@ -148,38 +132,35 @@ int Preprocessor::expand_line(vector<string> *expanded_prog_lines, char prog_lin
     if (inst_type == InstructionType::DEFINE) {
 
         // verify the line is a valid DEFINE instruction
-        int valid_define_line = is_valid_define_line(tokens, num_tokens);
+        int valid_define_line = is_valid_define_line(prog_line);
         if (valid_define_line < 0) return valid_define_line;
 
         // expand the line
-        int num_lines = expand_define_instruction(tokens, num_tokens, expanded_prog_lines);
+        int num_lines = expand_define_instruction(prog_line, exp_prog);
         if (num_lines < 0) return num_lines;
 
-        // if the line didn't need expanding, copy the line directly
-        if (num_lines == 0) {
-            expanded_prog_lines->push_back(prog_line);
-            num_lines = 1;
-        }
-
-
         // mark this variable as defined
-        defined_variables->insert(string(tokens[1]));
+        string var_name = tokens->at(1);
+        defined_variables->insert(var_name);
         return num_lines;
     }
     
     if (inst_type == InstructionType::DECLARE_VECTOR) {
 
         // verify the line is a valid DECLARE_VECTOR instruction
-        int valid_declare_vector_line = is_valid_declare_vector_line(tokens, num_tokens);
+        int valid_declare_vector_line = is_valid_declare_vector_line(prog_line);
         if (valid_declare_vector_line < 0) return valid_declare_vector_line;
 
         // write the expanded component declarations into expanded_shape_lines
         // grab the size of the vector from the return value of expand_declare_vector_instruction
-        int vector_size = expand_declare_vector_instruction(tokens, expanded_prog_lines);
+        int vector_size = expand_declare_vector_instruction(prog_line, exp_prog);
 
         // record the type and dimension of this vector
-        vectors->insert(make_pair(string(tokens[2]), get_variable_type(string(tokens[1]))));
-        vector_dimensions->insert(make_pair(string(tokens[2]), stoi(string(tokens[3]))));
+        string vec_name = tokens->at(2);
+        VariableType vec_type = get_variable_type(tokens->at(1));
+        int vec_size = stoi(tokens->at(3));
+        vectors->insert(make_pair(vec_name, vec_type));
+        vector_dimensions->insert(make_pair(vec_name, vec_size));
 
         // the number of expanded lines is precisely the dimension of the vector (one line per component)
         return vector_size;
@@ -191,102 +172,92 @@ int Preprocessor::expand_line(vector<string> *expanded_prog_lines, char prog_lin
 }
 
 
-/* --------------------------- Tokenizer ---------------------------- */
-
-
-int tokenize_line(char line[], char *tokens[MAX_NUM_TOKENS], const string& delim) {
-
-    if (line == NULL || tokens == NULL) return OTHER_ERROR;
-    if (strcmp(line, "") == 0) return 0;
-    
-    char *next_token;
-    int num_tokens = 0;
-
-    // grab the first token and copy it into the tokens array
-    next_token = strtok(line, delim.c_str());
-    if (!next_token) return INVALID_LINE;
-    tokens[num_tokens] = new char[MAX_LINE_LENGTH];
-    strcpy(tokens[num_tokens], next_token);
-    num_tokens++;
-
-    // grab all the subsequent tokens and copy them into the tokens array
-    while ((next_token = strtok(NULL, delim.c_str())) != NULL) {
-        tokens[num_tokens] = new char[MAX_LINE_LENGTH];
-        strcpy(tokens[num_tokens], next_token);
-        num_tokens++;
-    }
-
-    return num_tokens;
-}
-
 /* ------------------------- Main Expansion Methods ------------------------- */
 
 
-int Preprocessor::expand_declare_vector_instruction(char *tokens[], vector<string> *expanded_prog_lines) {
-    char *vec_type = tokens[1], *vec_name = tokens[2];
-    int vec_size = stoi(tokens[3]);
-    // copy expanded declaration lines into expanded_shape_lines
-    char *buffer;
+int Preprocessor::expand_declare_vector_instruction(const string& line, ofstream &exp_prog) {
+
+    if (line.compare("")) return 0;
+
+    // tokenize the line
+    vector<string> *tokens = new vector<string>();
+    int num_tokens = tokenize_line(line, tokens);
+    if (num_tokens != 4) return INVALID_LINE;
+
+    // grab the vector name, type and size
+    string vec_type = tokens->at(1), vec_name = tokens->at(2);
+    int vec_size = stoi(tokens->at(3));
+    
+    // expand into declarations of components
     for (int i = 0; i < vec_size; i++) {
-        buffer = new char[MAX_LINE_LENGTH];
-        sprintf(buffer, "declare %s %s.%d", vec_type, vec_name, i);
-        expanded_prog_lines->push_back(string(buffer));
+        exp_prog << "declare " << vec_type << " " << vec_name << "." << i << endl;
     }
 
     return vec_size;    
 }
 
 
-int Preprocessor::expand_define_instruction(char *tokens[], int num_tokens, vector<string> *expanded_prog_lines) {
+int Preprocessor::expand_define_instruction(const string& line, ofstream &exp_prog) {
 
-    string var_name(tokens[1]);
-    string operation(tokens[3]);
+    if (line.compare("")) return 0;
+
+    // tokenize the line
+    vector<string> *tokens = new vector<string>();
+    int num_tokens = tokenize_line(line, tokens);
+    if (num_tokens < 4 || num_tokens > 6) return INVALID_LINE;
+
+    string var_name = tokens->at(1), operation = tokens->at(3);
 
     if (is_valid_vector_operation(operation)) {
         OperationType vec_oper = get_operation_type(operation);
-        string operand1(tokens[4]);
-        string operand2(tokens[5]);
-        return expand_vector_instruction(vec_oper, var_name, operand1, operand2, expanded_prog_lines);
+        string operand1 = tokens->at(4);
+        string operand2 = tokens->at(5);
+        return expand_vector_instruction(vec_oper, var_name, operand1, operand2, exp_prog);
 
     }
 
     else if (is_valid_macro(operation)) {
         if (num_tokens == 5) {
-            string operand(tokens[4]);
-            return expand_unary_macro(operation, operand, var_name, expanded_prog_lines);
+            string operand = tokens->at(4);
+            return expand_unary_macro(operation, operand, var_name, exp_prog);
         }
         if (num_tokens == 6) {
-            string operand1(tokens[4]);
-            string operand2(tokens[5]);
-            return expand_binary_macro(operation, operand1, operand2, var_name, expanded_prog_lines);
+            string operand1 = tokens->at(4);
+            string operand2 = tokens->at(5);
+            return expand_binary_macro(operation, operand1, operand2, var_name, exp_prog);
         }
 
     }
 
-    return 0;
+    else if (is_constant(operation) || is_valid_var_name(operation)) {
+        exp_prog << line << endl;
+        return 1;
+    }
+
+    return INVALID_LINE;
 
 }
 
 
 int Preprocessor::expand_vector_instruction(const OperationType& oper_type, const string& result, const string& operand1, const string& operand2,
-    vector<string> *expanded_prog_lines) {
+    ofstream& exp_prog) {
 
     int dimension = vector_dimensions->at(operand1);
 
     if (oper_type == OperationType::DOT)
-        return expand_dot_product_instruction(result, operand1, operand2, dimension, expanded_prog_lines);
+        return expand_dot_product_instruction(result, operand1, operand2, dimension, exp_prog);
 
     else if (oper_type == OperationType::COMPONENT_WISE_ADD)
-        return expand_component_wise_add_instruction(result, operand1, operand2, dimension, expanded_prog_lines);
+        return expand_component_wise_add_instruction(result, operand1, operand2, dimension, exp_prog);
 
     else if (oper_type == OperationType::COMPONENT_WISE_MUL)
-        return expand_component_wise_mul_instruction(result, operand1, operand2, dimension, expanded_prog_lines);
+        return expand_component_wise_mul_instruction(result, operand1, operand2, dimension, exp_prog);
 
     else if (oper_type == OperationType::SCALE_VECTOR) 
-        return expand_scale_vector_instruction(result, operand1, operand2, dimension, expanded_prog_lines);
+        return expand_scale_vector_instruction(result, operand1, operand2, dimension, exp_prog);
 
     else if (oper_type == OperationType::INCREMENT_VECTOR)
-        return expand_increment_vector_instruction(result, operand1, operand2, dimension, expanded_prog_lines);
+        return expand_increment_vector_instruction(result, operand1, operand2, dimension, exp_prog);
 
     else return INVALID_LINE;
 }
@@ -299,7 +270,7 @@ int Preprocessor::expand_vector_instruction(const OperationType& oper_type, cons
 
 
 int Preprocessor::expand_unary_macro(const string& macro_name, const string& operand, const string& result, 
-    vector<string> *expanded_prog_lines) {
+    ofstream& exp_prog) {
 
     struct macro *macro = macros->at(macro_name);
     vector<string> *macro_lines = macro->lines;
@@ -308,7 +279,7 @@ int Preprocessor::expand_unary_macro(const string& macro_name, const string& ope
     for (int i = 0; i < macro->num_lines; i++) {
         string dummy_line = macro_lines->at(i);
         string modified_line = substitute_dummy_names(dummy_line, macro->result, macro->operand1, "", result, operand, "", macro->num_references);
-        expanded_prog_lines->push_back(modified_line);
+        exp_prog << modified_line << endl;
     }
 
     return macro->num_lines;
@@ -317,7 +288,7 @@ int Preprocessor::expand_unary_macro(const string& macro_name, const string& ope
 
 
 int Preprocessor::expand_binary_macro(const string& macro_name, const string& operand1, const string& operand2, const string& result, 
-    vector<string> *expanded_prog_lines) {
+    ofstream& exp_prog) {
 
     struct macro *macro = macros->at(macro_name);
     vector<string> *macro_lines = macro->lines;
@@ -326,7 +297,7 @@ int Preprocessor::expand_binary_macro(const string& macro_name, const string& op
     for (int i = 0; i < macro->num_lines; i++) {
         string dummy_line = macro_lines->at(i);
         string modified_line = substitute_dummy_names(dummy_line, macro->result, macro->operand1, macro->operand2, result, operand1, operand2, macro->num_references);
-        expanded_prog_lines->push_back(modified_line);
+        exp_prog << modified_line << endl;
     }
 
     return macro->num_lines;
@@ -337,29 +308,30 @@ int Preprocessor::expand_binary_macro(const string& macro_name, const string& op
 string Preprocessor::substitute_dummy_names(const string& dummy_line, string dummy_result, string dummy_op1, string dummy_op2,
     const string& result, const string& operand1, const string& operand2, int macro_num_references) {
 
-    char line_copy[MAX_LINE_LENGTH];
-    char *tokens[MAX_NUM_TOKENS];
-    strcpy(line_copy, dummy_line.c_str());
-    int num_tokens = tokenize_line(line_copy, tokens, delimiters);
-
+    // tokenize the line
+    vector<string> *tokens = new vector<string>();
+    int num_tokens = tokenize_line(dummy_line, tokens, " ");
+    if (num_tokens < 3) return "";
 
     string modified_line = "";
 
     for (int i = 0; i < num_tokens; i++) {
-        if (strcmp(tokens[i], dummy_result.c_str()) == 0) {
+        string token = tokens->at(i);
+
+        if (token.compare(dummy_result) == 0) {
             modified_line.append(result + " ");
         }
-        else if (strcmp(tokens[i], dummy_op1.c_str()) == 0) {
+        else if (token.compare(dummy_op1) == 0) {
             modified_line.append(operand1 + " ");
         }
-        else if (strcmp(tokens[i], dummy_op2.c_str()) == 0) {
+        else if (token.compare(dummy_op2) == 0) {
             modified_line.append(operand2 + " ");
         }
-        else if (!is_keyword(string(tokens[i])) && !is_constant(string(tokens[i]))) {
-            modified_line.append(string(tokens[i]) + to_string(macro_num_references) + " ");
+        else if (!is_keyword(token) && !is_constant(token)) {
+            modified_line.append(token + to_string(macro_num_references) + " ");
         }
         else {
-            modified_line.append(string(tokens[i]) + " ");
+            modified_line.append(token + " ");
         }
     }
 
@@ -384,64 +356,44 @@ bool Preprocessor::is_unary_macro(const string& name) {
 
 
 int Preprocessor::expand_dot_product_instruction(const string& result, const string& vector1, const string& vector2, int dimension,
-    vector<string> *expanded_prog_lines) {
-
-    const char *vec1 = vector1.c_str(), *vec2 = vector2.c_str(), *res = result.c_str();
+    ofstream& exp_prog) {
 
     // declare and define intvars for all the component-wise multiplications
-    char *buffer;
     for (int i = 0; i < dimension; i++) {
-        buffer = new char[MAX_LINE_LENGTH];
-        sprintf(buffer, "declare intvar %s.%d", res, i);
-        expanded_prog_lines->push_back(string(buffer));
-        sprintf(buffer, "define %s.%d = mul %s.%d %s.%d", res, i, vec1, i, vec2, i);
-        expanded_prog_lines->push_back(string(buffer));
+        exp_prog << "declare intvar " << result << "." << i << endl;
+        exp_prog << "define " << result << "." << i << " = mul " << vector1 << "." << i << " " << vector2 << "." << i << endl;
     }
 
     // if the operand vectors' dimension is 1, the dot product is equal to the single component-wise product
     if (dimension == 1) {
-        buffer = new char[MAX_LINE_LENGTH];
-        sprintf(buffer, "define %s = %s.0", res, res);
-        expanded_prog_lines->push_back(string(buffer));
-
+        exp_prog << "define " << result << " = " << result << ".0" << endl;
         return 3;
     }
 
     // accumulate the sum of all the component-wise products
     for (int j = 0; j < (dimension - 1); j++) {
-        buffer = new char[MAX_LINE_LENGTH];
-        sprintf(buffer, "declare intvar %s.%d", res, dimension + j);
-        expanded_prog_lines->push_back(string(buffer));
+        exp_prog << "declare intvar " << result << "." << dimension + j << endl;
         if (j == 0) {
-            sprintf(buffer, "define %s.%d = add %s.%d %s.%d", res, dimension + j, res, 0, res, 1);
-            expanded_prog_lines->push_back(string(buffer));
+            exp_prog << "define " << result << "." << dimension + j << " = add " << result << "." << 0 << " " << result << "." << 1 << endl;
         } else {
-            sprintf(buffer, "define %s.%d = add %s.%d %s.%d", res, dimension + j, res, dimension + j - 1, res, j + 1);
-            expanded_prog_lines->push_back(string(buffer));
+            exp_prog << "define " << result << "." << dimension + j << " = add " << result << "." << dimension + j - 1 << " " << result << "." << j + 1 << endl;
         }
             
     }
 
     // define the value of the final dot product
-    buffer = new char[MAX_LINE_LENGTH];
-    sprintf(buffer, "define %s = %s.%d", res, res, 2 * dimension - 2);
-    expanded_prog_lines->push_back(string(buffer));
+    exp_prog << "define " << result << " = " << result << "." << 2 * dimension - 2 << endl;
     return (4 * dimension - 1);
 
 }
 
 
 int Preprocessor::expand_component_wise_add_instruction(const string& result_vec, const string& vector1, const string& vector2, int dimension, 
-    vector<string> *expanded_prog_lines) {
-
-    const char *vec1 = vector1.c_str(), *vec2 = vector2.c_str(), *res = result_vec.c_str();
+    ofstream& exp_prog) {
 
     // define the components of the result vector as the component-wise sums of the operand vectors
-    char *buffer;
     for (int i = 0; i < dimension; i++) {
-        buffer = new char[MAX_LINE_LENGTH];
-        sprintf(buffer, "define %s.%d = add %s.%d %s.%d", res, i, vec1, i, vec2, i);
-        expanded_prog_lines->push_back(string(buffer));
+        exp_prog << "define " << result_vec << "." << i << " = add " << vector1 << "." << i << " " << vector2 << "." << i << endl;
     }
 
     return dimension;
@@ -450,16 +402,11 @@ int Preprocessor::expand_component_wise_add_instruction(const string& result_vec
 
 
 int Preprocessor::expand_component_wise_mul_instruction(const string& result_vec, const string& vector1, const string& vector2, int dimension, 
-    vector<string> *expanded_prog_lines) {
-
-    const char *vec1 = vector1.c_str(), *vec2 = vector2.c_str(), *res = result_vec.c_str();
+    ofstream& exp_prog) {
 
     // define the components of the result vector as the component-wise products of the operand vectors
-    char *buffer;
     for (int i = 0; i < dimension; i++) {
-        buffer = new char[MAX_LINE_LENGTH];
-        sprintf(buffer, "define %s.%d = mul %s.%d %s.%d", res, i, vec1, i, vec2, i);
-        expanded_prog_lines->push_back(string(buffer));
+        exp_prog << "define " << result_vec << "." << i << " = mul " << vector1 << "." << i << " " << vector2 << "." << i << endl;
     }
 
     return dimension;
@@ -468,16 +415,11 @@ int Preprocessor::expand_component_wise_mul_instruction(const string& result_vec
 
 
 int Preprocessor::expand_scale_vector_instruction(const string& result_vec, const string& vector1, const string& scaling_factor, int dimension, 
-    vector<string> *expanded_prog_lines) {
-
-    const char *vec = vector1.c_str(), *s_factor = scaling_factor.c_str(), *res = result_vec.c_str();
+    ofstream& exp_prog) {
 
     // define the components of the result vector as the products of the operand's components and the scaling factor
-    char *buffer;
     for (int i = 0; i < dimension; i++) {
-        buffer = new char[MAX_LINE_LENGTH];
-        sprintf(buffer, "define %s.%d = mul %s.%d %s", res, i, vec, i, s_factor);
-        expanded_prog_lines->push_back(string(buffer));
+        exp_prog << "define " << result_vec << "." << i << " = mul " << vector1 << "." << i << " " << scaling_factor << endl;
     }
 
     return dimension;
@@ -486,16 +428,11 @@ int Preprocessor::expand_scale_vector_instruction(const string& result_vec, cons
 
 
 int Preprocessor::expand_increment_vector_instruction(const string& result_vec, const string& vector1, const string& incrementing_factor, int dimension,
-    vector<string> *expanded_prog_lines) {
-
-    const char *vec = vector1.c_str(), *incr_factor = incrementing_factor.c_str(), *res = result_vec.c_str();
+    ofstream& exp_prog) {
 
     // define the components of the result vector as the sums of the operand's components and the incrementing factor
-    char *buffer;
     for (int i = 0; i < dimension; i++) {
-        buffer = new char[MAX_LINE_LENGTH];
-        sprintf(buffer, "define %s.%d = add %s.%d %s", res, i, vec, i, incr_factor);
-        expanded_prog_lines->push_back(string(buffer));
+        exp_prog << "define " << result_vec << "." << i << " = add " << vector1 << "." << i << " " << incrementing_factor << endl;
     }
 
     return dimension;
@@ -508,17 +445,18 @@ int Preprocessor::expand_increment_vector_instruction(const string& result_vec, 
 
 
 
-int Preprocessor::parse_macro_line(char macro_line[], struct macro *macro) {
+int Preprocessor::parse_macro_line(const string& macro_line, struct macro *macro) {
     
-    if (macro_line == NULL || macro == NULL) return OTHER_ERROR;
+    if (macro == NULL) return OTHER_ERROR;
+    if (macro_line.compare("") == 0) return 0;
 
     // tokenize the large macro line into its sublines (separated by semi-colons)
-    char *sub_macro_lines[MAX_EXPANSION_FACTOR];
+    vector<string> sub_macro_lines = new vector<string>();
     int num_sub_lines = tokenize_line(macro_line, sub_macro_lines, ";");
     if (num_sub_lines < 2) return INVALID_LINE;
     
     // make sure the first sub line is valid and parse it
-    int first_line_valid = parse_macro_first_line(sub_macro_lines[0], macro);
+    int first_line_valid = parse_macro_first_line(sub_macro_lines->at(0), macro);
     if (first_line_valid < 0) return first_line_valid;
 
     macro->lines = new vector<string>();
@@ -527,9 +465,9 @@ int Preprocessor::parse_macro_line(char macro_line[], struct macro *macro) {
     // validate and parse subsequent sub lines.
     int subsequent_line_valid;
     for (int i = 1; i < num_sub_lines; i++) {
-        subsequent_line_valid = parse_macro_subsequent_line(sub_macro_lines[i], macro);
+        subsequent_line_valid = parse_macro_subsequent_line(sub_macro_lines->at(i), macro);
         if (subsequent_line_valid < 0) return subsequent_line_valid;
-        macro->lines->push_back(string(sub_macro_lines[i]));
+        macro->lines->push_back(string(sub_macro_lines->at(i)));
         macro->num_lines++;
     }
 
@@ -539,26 +477,21 @@ int Preprocessor::parse_macro_line(char macro_line[], struct macro *macro) {
 }
 
 
-int Preprocessor::parse_macro_first_line(char first_line[], struct macro *macro) {
+int Preprocessor::parse_macro_first_line(const string& first_line, struct macro *macro) {
 
-    if (first_line == NULL || macro == NULL) return OTHER_ERROR;
+    if (macro == NULL) return OTHER_ERROR;
+    if (first_line.compare("") == 0) return 0;
 
-    // make a copy of the line
-    char line_copy[MAX_LINE_LENGTH];
-    strcpy(line_copy, first_line);
     // tokenize
-    char *tokens[MAX_LINE_LENGTH];
-    int num_tokens = tokenize_line(line_copy, tokens, delimiters);
+    vector<string> tokens = new vector<string>();
+    int num_tokens = tokenize_line(macro_line, tokens, " ");
 
     // check for trivial errors
     if (num_tokens < 5 || num_tokens > 6) return INVALID_LINE;
-    if (tokens[0] == NULL || tokens[1] == NULL || tokens[2] == NULL ||
-        tokens[3] == NULL || tokens[4] == NULL) return OTHER_ERROR; 
-    if (num_tokens == 6 && tokens[5] == NULL) return OTHER_ERROR;
 
     // grab the tokens in strings
-    string first_token(tokens[0]), second_token(tokens[1]), third_token(tokens[2]);
-    string fourth_token(tokens[3]), fifth_token(tokens[4]);
+    string first_token = tokens->at(0), second_token = tokens->at(1), third_token = tokens->at(2);
+    string fourth_token = tokens->at(3), fifth_token = tokens->at(4);
     string sixth_token = "";
 
     // make sure the line format is correct
@@ -589,25 +522,26 @@ int Preprocessor::parse_macro_first_line(char first_line[], struct macro *macro)
 }
 
 
-int Preprocessor::parse_macro_subsequent_line(char line[], struct macro *macro) {
+int Preprocessor::parse_macro_subsequent_line(const string& line, struct macro *macro) {
     
-    if (line == NULL || macro == NULL) return OTHER_ERROR;
+    if (macro == NULL) return OTHER_ERROR;
+    if (line.compare("") == 0) return 0;
 
-    // make a copy of the line
-    char line_copy[MAX_LINE_LENGTH];
-    strcpy(line_copy, line);
     // tokenize
-    char *tokens[MAX_LINE_LENGTH];
-    int num_tokens = tokenize_line(line_copy, tokens, delimiters);
+    vector<string> tokens = new vector<string>();
+    int num_tokens = tokenize_line(macro_line, tokens, " ");
     
     // temporarily declare or define this variable
-    if (is_valid_declare_line(tokens, num_tokens) == 0) {
-        variables->insert(make_pair(string(tokens[2]), get_variable_type(string(tokens[1]))));
+    if (is_valid_declare_line(line) == 0) {
+        string var_name = tokens->at(2);
+        VariableType var_type = get_variable_type(tokens->at(1));
+        variables->insert(make_pair(var_name, var_type));
         return 0;
     }
 
-    if (is_valid_define_line(tokens, num_tokens) == 0) {
-        defined_variables->insert(string(tokens[1]));
+    if (is_valid_define_line(line) == 0) {
+        string var_name = tokens->at(1);
+        defined_variables->insert(var_name);
         return 0;
     }
 
@@ -805,18 +739,22 @@ void test_expand(char line[], Preprocessor *p) {
 
 /* IF A MACRO IS CALLED TWICE IN A PROGRAM, LALA WILL BE DECLARED TWICE, IT WON'T WORK THE SECOND TIME */
 void test_expand_macro() {
-    char a[1000], b[1000], c[1000], d[1000], e[1000];
+    char a[1000], b[1000], c[1000], d[1000], e[1000], f[1000], g[1000];
     strcpy(a, "#macro res = my_macro opone optwo; declare intvar lala; define lala = logistic opone; declare intvar q; define q = pow lala 3; define res = mul optwo q");
     strcpy(b, "declare input a");
     strcpy(c, "declare weight b");
     strcpy(d, "declare output c");
     strcpy(e, "define c = my_macro a b");
+    strcpy(f, "declare intvar g");
+    strcpy(g, "define g = my_macro a b");
     Preprocessor *p = new Preprocessor();
     test_expand(a, p);
     test_expand(b, p);
     test_expand(c, p);
     test_expand(d, p);
     test_expand(e, p);
+    test_expand(f, p);
+    test_expand(g, p);
 }
 
 void test_expand_dot_product() {

@@ -3,6 +3,7 @@
 #include <string>
 #include <list>
 #include <stdio.h>
+#include <vector>
 
 #include "Compiler.h"
 #include "utilities.h"
@@ -28,499 +29,11 @@ Compiler::Compiler() {
 
 /* ---------------- Main Methods -------------- */
 
-int tokenize_line(char shape_line[], char *tokens[]) {
 
-    if (shape_line == NULL || tokens == NULL) return OTHER_ERROR;
-    if (strcmp(shape_line, "") == 0) return 0;
-
-    char *next_token;
-    int num_tokens = 0;
-
-    // grab the first token and copy it into the tokens array
-    next_token = strtok(shape_line, " ");
-    if (!next_token) return INVALID_LINE;
-    strcpy(tokens[num_tokens], num_tokens);
-    num_tokens++;
-
-    // grab as many subsequent tokens as there are and copy them into the tokens array
-    while (next_token != NULL) {
-        next_token = strtok(NULL, " ");
-        strcpy(tokens[num_tokens], num_tokens);
-        num_tokens++;
-    }
-
-    return num_tokens;
-}
-
-int Compiler::is_valid_declare_line(char *tokens[], int num_tokens) {
-    if (!tokens) return OTHER_ERROR;
-    if (num_tokens != 3) return INVALID_LINE;
-    if (tokens[0] == NULL || tokens[1] == NULL || tokens[2] == NULL) return OTHER_ERROR;
-
-    if (strcmp(tokens[0], "declare") != 0) return INVALID_LINE;
-    if (get_variable_type(tokens[1]) == VariableType::INVALID_VAR_TYPE) return INVALID_VAR_TYPE;
-    if (!is_valid_var_name(string(tokens[2]))) return INVALID_VAR_NAME;
-
-    return 0;
-}
-
-int Compiler::is_valid_declare_vector_line(char *tokens[], int num_tokens) {
-
-    if (!tokens) return OTHER_ERROR;
-    if (num_tokens != 3) return INVALID_LINE;
-    if (tokens[0] == NULL || tokens[1] == NULL || tokens[2] == NULL) return OTHER_ERROR;    
-
-    if (strcmp(tokens[0], "declare_vector") != 0) return INVALID_LINE;
-    if (get_variable_type(tokens[1]) == VariableType::INVALID_VAR_TYPE) return INVALID_VAR_TYPE;
-    if (!is_valid_var_name(string(tokens[2]))) return INVALID_VAR_NAME;
-
-    return 0;
-
-}
-
-int Compiler::is_valid_define_line(char *tokens[], int num_tokens) {
-
-    if (!tokens) return OTHER_ERROR;
-    if (num_tokens < 4 || num_tokens > 6) return INVALID_LINE;
-    if (tokens[0] == NULL || tokens[1] == NULL || tokens[2] == NULL || tokens[3] == NULL) return OTHER_ERROR;
-
-    string first_token(tokens[0]);
-    string second_token(tokens[1]);
-    string third_token(tokens[2]);
-
-    // every define instruction resembles "define <var_name> = ..."
-    if (first_token.compare("define") != 0 || !is_valid_var_name(second_token) || third_token.compare("=") != 0)
-        return INVALID_LINE;
-
-    string fourth_token(tokens[3]);
-    if (num_tokens >= 5) string fifth_token(tokens[4]);
-    if (num_tokens >= 6) string sixth_token(tokens[5]);
-
-    bool valid;
-
-    // a variable could be defined as a constant
-    if (is_constant(fourth_token)) {
-        valid = num_tokens == 4;
-        return (valid ? 0 : INVALID_LINE);
-    }
-
-    // a variable could be defined as an operation of 1 or 2 constants/variables
-    // it could also be defined as an operation of two vectors, or a vector and a constant
-    if (is_valid_operation(fourth_token)) {
-        
-        if (is_binary_operation(fourth_token)) {
-            valid = num_tokens == 6;
-            valid = valid && (is_constant(fifth_token) || is_valid_var_name(fifth_token));
-            valid = valid && (is_constant(sixth_token) || is_valid_var_name(sixth_token))
-            return (valid ? 0 : INVALID_LINE);
-        }
-
-        else if (is_unary_operation(fourth_token)) {
-            valid num_tokens == 5 && (is_constant(fourth_token) || is_valid_var_name(fourth_token));
-            return (valid ? 0 : INVALID_LINE);
-        }
-
-        else if (is_binary_vector_operation(fourth_token)) {
-            valid = num_tokens == 6 && is_valid_var_name(fifth_token) && is_valid_var_name(sixth_token);
-            return (valid ? 0 : INVALID_LINE);
-        }
-
-        else if (is_unary_vector_operation(fourth_token)) {
-            valid = num_tokens == 6 && is_valid_var_name(fifth_token);
-            valid = valid && (is_constant(sixth_token) || is_valid_var_name(sixth_token));
-            return (valid ? 0 : INVALID_LINE);
-        }
-
-        else return INVALID_LINE;
-
-
-    }
-
-    // a variable could be defined as equivalent to another variable
-    if (is_valid_var_name(fourth_token)) {
-        valid = num_tokens == 4 && strcmp(fourth_token, second_token) != 0;
-        return (valid ? 0 : INVALID_LINE);
-    }
-
-    // a variable could be defined as a user-given operation of 1 or 2 constants/variables
-    // user-defined vector operations are not allowed
-    if (is_valid_macro(fourth_token)) {
-
-        if (is_binary_macro(fourth_token)) {
-            valid = num_tokens == 6;
-            valid = valid && (is_constant(fifth_token) || is_valid_var_name(fifth_token));
-            valid = valid && (is_constant(sixth_token) || is_valid_var_name(sixth_token))
-            return (valid ? 0 : INVALID_LINE);
-        }
-
-        else if (is_unary_macro(fourth_token)) {
-            valid num_tokens == 5 && (is_constant(fourth_token) || is_valid_var_name(fourth_token));
-            return (valid ? 0 : INVALID_LINE);
-        }
-
-        else return INVALID_LINE;
-    }
-
-    return INVALID_LINE;
-
-}
-
-int Compiler::expand_shape_line(char expanded_shape_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH], char shape_line[]) {
-
-    // edge error cases
-    if (shape_line == NULL || expanded_shape_lines == NULL) return OTHER_ERROR;
-    if (strcmp(shape_line, "") == 0) return 0;
-
-
-    // store a copy of the Shape Program line, because it is about to be mangled by strtok
-    char shape_line_copy[MAX_LINE_LENGTH];
-    strcpy(shape_line_copy, shape_line);
-
-    // tokenize the line
-    char *tokens[MAX_NUM_TOKENS];
-    int num_tokens = tokenize_line(shape_line, char *tokens[]);
-    if (num_tokens < 0) return INVALID_LINE;
-
-    // grab the instruction type, and act accordingly
-    InstructionType inst_type = get_instruction_type(string(tokens[0]));
-    if (inst_type == InstructionType::INVALID_INST) return INVALID_LINE;
-
-
-
-    // declare instructions need no expanding
-    // define instructions need expanding if they involve macros or vector operations
-    // declare_vector instructions always need expanding into their components
-
-    if (inst_type == InstructionType::DECLARE) {
-        // verify the line is a valid DECLARE instruction
-        int valid_declare_line = is_valid_declare_line(tokens, num_tokens);
-        if (valid_declare_line < 0) return valid_declare_line;
-
-        // copy the line directly. It needs no expanding
-        strcpy(expanded_shape_lines[0], shape_line_copy);
-        return 1;
-    }
-    
-    else if (inst_type = InstructionType::DEFINE) {
-        // verify the line is a valid DEFINE instruction
-        int valid_define_line = is_valid_define_line(tokens, num_tokens);
-        if (valid_define_line < 0) return valid_define_line;
-
-        // expand the line
-        int num_lines = expand_define_instruction(tokens, num_tokens, expanded_shape_lines);
-        return num_lines;
-    }
-    
-    else if (inst_type == InstructionType::DECLARE_VECTOR) {
-        // verify the line is a valid DECLARE_VECTOR instruction
-        int valid_declare_vector_line = is_valid_declare_vector_line(tokens, num_tokens);
-        if (valid_declare_vector_line < 0) return valid_declare_vector_line;
-
-        // write the expanded component declarations into expanded_shape_lines
-        // grab the size of the array from the return value of expand_declare_vector_instruction
-        int vector_size = expand_declare_vector_instruction(tokens, expanded_shape_lines);
-
-        // do nothing for zero-length vectors
-        if (vector_size == 0) return 0;
-
-        // note the dimension of this vector
-        vector_dimensions->insert(make_pair(var_name, vector_size));
-        // the number of expanded lines is precisely the dimension of the vector (one line per component)
-        return vector_size;
-
-    }
-
-    else return INVALID_LINE;
-
-}
-
-int expand_declare_vector_instruction(char *tokens[], char expanded_shape_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH]) {
-    char *vec_type = tokens[1], *vec_name = tokens[2];
-    int vec_size = stoi(tokens[3]);
-        
-    // copy expanded declaration lines into expanded_shape_lines
-    for (int i = 0; i < vec_size; i++) {
-        sprintf(expanded_shape_lines[i], "declare %s %s.%d", vec_type, vec_name, i);
-    }
-
-    return vec;    
-}
-
-
-int expand_define_instruction(char *tokens[], int num_tokens, char expanded_shape_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH]) {
-
-    char *var_name = tokens[1];
-    string operation(tokens[3]);
-
-    if (is_vector_operation(operation)) {
-
-        OperationType vec_oper = get_instruction_type(operation);
-        string operand1(tokens[4]);
-        string operand2(tokens[5]);
-        expand_vector_instruction(vec_oper, operand1, operand2, expanded_shape_lines);
-
-    }
-
-    if (is_macro(string(operation))) {
-
-        if (num_tokens == 5) {
-            string operand(tokens[4]);
-            expand_unary_macro(operation, operand);
-        }
-        if (num_tokens == 6) {
-            string operand1(tokens[4]);
-            string operand2(tokens[5]);
-            expand_binary_macro(operation, operand1, operand2);
-        }
-
-    }
-
-}
-
-
-
-int Compiler::expand_shape_line(char expanded_shape_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH], char shape_line[]) {
-
-    if (shape_line == NULL || expanded_shape_lines == NULL) {
-        return OTHER_ERROR;
-    }
-
-    if (strcmp(shape_line, "") == 0) {
-        return 0;
-    }
-
-    cout << "in esl, line: " << shape_line << endl;
-
-    // store a copy of the Shape Program line, because it is about to be mangled by strtok
-    char shape_line_copy[MAX_LINE_LENGTH];
-    //cout << "here" << endl;
-    strcpy(shape_line_copy, shape_line);
-
-
-
-
-    // determine instruction type
-    char *first_token = strtok(shape_line, " ");
-    if (first_token == NULL) {
-        return INVALID_LINE;
-    }
-    InstructionType inst_type = get_instruction_type(string(first_token));
-    if (inst_type == InstructionType::INVALID_INST) {
-        return INVALID_LINE;
-    }
-
-
-    if (inst_type == InstructionType::DECLARE_VECTOR) {
-        cout << "is declare vector" << endl;
-        // grab the type of this vector
-        char *v_type = strtok(NULL, " ");
-        if (v_type == NULL) {
-            return INVALID_LINE;
-        }
-        VariableType var_type = get_variable_type(string(v_type));
-        if (var_type == VariableType::INVALID_VAR_TYPE) {
-            cout << "invalid var type: " << v_type << endl;
-            return INVALID_LINE;
-        }
-        cout << "type: " << v_type << endl;
-        // grab the name of the vector
-        char *v_name = strtok(NULL, " ");
-        if (v_name == NULL) {
-            return INVALID_LINE;
-        }
-        if (!is_valid_var_name(string(v_name))) {
-            return INVALID_VAR_NAME;
-        }
-        string var_name(v_name);
-        cout << "name: " << var_name << endl;
-        // grab the size of the vector
-        char *vec_size = strtok(NULL, " ");
-        if (vec_size == NULL) {
-            return INVALID_LINE;
-        }
-        if (!is_int(string(vec_size))) {
-            return INVALID_LINE;
-        }
-        int vector_size = stoi(string(vec_size));
-        cout << "type: " << v_type << ", name: " << var_name << ", size: " << vec_size << endl;
-
-        // do nothing if the vector size is 0
-        if (vector_size == 0) {
-            return 0;
-        }
-
-        // copy expanded declaration lines into expanded_shape_lines
-        for (int i = 0; i < vector_size; i++) {
-            sprintf(expanded_shape_lines[i], "declare %s %s.%d", v_type, v_name, i);
-        }
-
-        vector_dimensions->insert(make_pair(var_name, vector_size));
-        return vector_size;
-
-    }
-
-
-
-    else if (inst_type == InstructionType::DEFINE) {
-
-        // grab the name of the variable being defined as a dot product
-        char *v_name = strtok(NULL, " ");
-        if (v_name == NULL) {
-            return INVALID_LINE;
-        }
-        if (!is_valid_var_name(string(v_name))) {
-            return INVALID_VAR_NAME;
-        }
-        string var_name(v_name);
-
-
-        // determine whether or not the instruction is a dot product operation
-        char *equal_sign = strtok(NULL, " ");
-        if (equal_sign == NULL) {
-            return INVALID_LINE;
-        }
-        char *after_equal = strtok(NULL, " ");
-        if (after_equal == NULL) {
-            return INVALID_LINE;
-        }
-        // if the line is not a dot product operation, end here
-        if (strcmp(after_equal, "dot") != 0) {
-            strcpy(expanded_shape_lines[0], shape_line_copy);
-            return 1;
-        }
-
-        
-        // now we know the line is a dot product line
-        char *vec1 = strtok(NULL, " ");
-        if (vec1 == NULL) {
-            return INVALID_LINE;
-        }
-        char *vec2 = strtok(NULL, " ");
-        if (vec2 == NULL) {
-            return INVALID_LINE;
-        }
-
-        // both of the operands must be previously declared vectors
-        if (vector_dimensions->count(string(vec1)) == 0 || vector_dimensions->count(string(vec2)) == 0) {
-            return INVALID_LINE;
-        }
-        // both the operand vectors must have the same dimension
-        if (vector_dimensions->at(string(vec1)) != vector_dimensions->at(string(vec2))) {
-            return INVALID_LINE;
-        }
-        // grab the dimension
-        int dimension = vector_dimensions->at(string(vec1));
-
-        //cout << "dimension: " << dimension << endl << endl;
-
-        // declare and define intvars for all the component-wise multiplications
-        for (int i = 0; i < dimension; i++) {
-            sprintf(expanded_shape_lines[2 * i], "declare intvar %s.%d", v_name, i);
-            cout << expanded_shape_lines[2 * i] << endl;
-            sprintf(expanded_shape_lines[2 * i + 1], "define %s.%d = mul %s.%d %s.%d", v_name, i, vec1, i, vec2, i);
-            cout << expanded_shape_lines[2 * i + 1] << endl << endl;
-        }
-
-        // if the operand vectors' dimension is 1, the dot product is equal to the single component-wise product
-        if (dimension == 1) {
-            sprintf(expanded_shape_lines[2], "define %s = add %s.0 0", v_name, v_name);
-            return 3;
-        }
-
-        // accumulate the sum of all the component-wise products
-        for (int j = 0; j < (dimension - 1); j++) {
-            sprintf(expanded_shape_lines[2 * j + 2 * dimension], "declare intvar %s.%d", v_name, dimension + j);
-            cout << "line index = " << 2 * j + 2 * dimension << ":       " << expanded_shape_lines[2 * j + 2 * dimension] << endl;
-            if (j == 0) {
-
-                sprintf(expanded_shape_lines[2 * j + 2 * dimension + 1], "define %s.%d = add %s.%d %s.%d", v_name, dimension + j, v_name, 0, v_name, 1);
-                cout << "j == 0, line # is " << 2 * j + 2 * dimension + 1 << ":     " << expanded_shape_lines[2 * j + 2 * dimension + 1] << endl; 
-            } else {
-                sprintf(expanded_shape_lines[2 * j + 2 * dimension + 1], "define %s.%d = add %s.%d %s.%d", v_name, dimension + j, v_name, dimension + j - 1, v_name, j + 1);
-                cout << "j == 1, line # is " << 2 * j + 2 * dimension + 1 << ":     " << expanded_shape_lines[2 * j + 2 * dimension + 1] << endl; 
-            }
-            
-        }
-
-        // define the value of the final dot product
-        sprintf(expanded_shape_lines[4 * dimension - 2], "define %s = add %s.%d 0", v_name, v_name, 2 * dimension - 2);
-        cout << "line index = " << 4 * dimension - 2 << ":      " << expanded_shape_lines[4 * dimension - 2] << endl;
-        return (4 * dimension - 1);
-
-
-        
-    }
-
-
-    else if (inst_type == InstructionType::DECLARE) {
-        strcpy(expanded_shape_lines[0], shape_line_copy);
-        return 1;
-    }
-
-    return INVALID_LINE;
-}
-
-
- // phase 1
-    // get line, if simple, copy into temp file
-    // if vector declaration, break into multiple declarataion lines
-    // if define dot, break up into multiple muls then cascading adds
-    // if define logistic, leave for now 
-int Compiler::compile_pass_one(const string& shape_prog_filename, const string& expanded_shape_prog_filename) {
+int Compiler::compile(const string& shape_prog_filename, const string& gcp_filename) {
 
     if (invalid_file_name(shape_prog_filename)) {
-        cerr << "Invalid Shape Program file name." << endl;
-        return OTHER_ERROR;
-    }
-
-    ifstream shape_prog(shape_prog_filename);
-    ofstream exp_shape_prog(expanded_shape_prog_filename);
-
-    // buffer into which we read a line from the file
-    char shape_line[MAX_LINE_LENGTH];
-
-    // array of buffers to hold the expanded lines
-    char expanded_shape_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH];
-
-    // indicates how many lines were generated from a given line in the Shape Program.
-    // 1 if no expansion was necessary, -1 if the Shape Program line was invalid.
-    int num_lines_expanded;
-
-    while(!shape_prog.eof())
-    {
-        shape_prog.getline(shape_line, MAX_LINE_LENGTH);
-        //cout << "line: " << shape_line << endl;
-
-        num_lines_expanded = expand_shape_line(expanded_shape_lines, shape_line);
-
-        if (num_lines_expanded < 0) {
-            return INVALID_LINE;
-        }
-
-        //cout << endl << endl << endl;
-        for (int i = 0; i < num_lines_expanded; i++) {
-            //cout << expanded_shape_lines[i] << endl;
-            exp_shape_prog.write(expanded_shape_lines[i], strlen(expanded_shape_lines[i]));
-            exp_shape_prog.write("\n", 1);
-        }
-
-        exp_shape_prog.write("\n", 1);
-
-    }
-
-    shape_prog.close();
-    exp_shape_prog.close();
-
-    return 0;
-
-}
-
-
-
-int Compiler::compile_pass_two(const string& shape_prog_filename, const string& gcp_filename) {
-
-    if (invalid_file_name(shape_prog_filename)) {
-        cerr << "Invalid Shape Program file name." << endl;
+        cerr << "Invalid Shape Program file name: " << shape_prog_filename << endl;
         return OTHER_ERROR;
     }
 
@@ -529,14 +42,10 @@ int Compiler::compile_pass_two(const string& shape_prog_filename, const string& 
     ofstream gcp(gcp_filename);
 
     // buffer into which we read a line from the file
-    char shape_line[MAX_LINE_LENGTH];
-
-    // buffer to hold an identical copy of the line read in.
-    // This line is mangled in the creation of the GCP-near-duplicate (See comment in Compiler.h)
-    char shape_line_copy[MAX_LINE_LENGTH];
+    string shape_line;
 
     // line to hold the GCP-near-duplicate line
-    char gcp_line[MAX_LINE_LENGTH];
+    string gcp_duplicate_line;
 
     // indicates whether the GCP-near-duplicate was created successfully
     int duplicate_success = 0;
@@ -548,36 +57,38 @@ int Compiler::compile_pass_two(const string& shape_prog_filename, const string& 
     // Copy the GCP-near-duplicate line into the GCP, then send the line to be parsed.
     while(!shape_prog.eof())
     {
-        shape_prog.getline(shape_line, MAX_LINE_LENGTH);
-        strcpy(shape_line_copy, shape_line);
+        getline(shape_prog, shape_line);
+        cout << "shape line: " << shape_line << endl;
+        //shape_prog.getline(shape_line, MAX_LINE_LENGTH);
+        //strcpy(shape_line_copy, shape_line);
 
-        duplicate_success = duplicate_line_for_gcp(shape_line_copy, gcp_line);
+        duplicate_success = duplicate_line_for_gcp(shape_line, &gcp_duplicate_line);
+        //duplicate_success = duplicate_line_for_gcp(shape_line_copy, gcp_line);
 
         if (duplicate_success == DUPLICATE_SUCCESS_DECLARE) {
-            gcp.write(gcp_line, strlen(gcp_line));
+            gcp << gcp_duplicate_line << endl;
+            //gcp.write(gcp_line, strlen(gcp_line));
         }
         else if(duplicate_success == DUPLICATE_SUCCESS_DEFINE) {
-            gcp.write(shape_line, strlen(shape_line));
+            gcp << gcp_duplicate_line << endl;
+            //gcp.write(shape_line, strlen(shape_line));
         }
         else if (duplicate_success == DUPLICATE_SUCCESS_EMPTY_LINE) {
-            
+            gcp << "\n";
         }
         else {
             cerr << "Invalid line: " << shape_line << endl;
             return duplicate_success;
         }
         
-        gcp.write("\n", 1);
-
         parse_success = parse_line(shape_line);
         if (parse_success != 0) {
-            cerr << "Invalid line: " << shape_line << endl;
+            cerr << "Couldn't be parsed: " << shape_line << endl;
             return parse_success;
         }
     }
 
     shape_prog.close();
-
 
 
     // After the while loop, the Data Flow Graph is assembled.
@@ -590,14 +101,15 @@ int Compiler::compile_pass_two(const string& shape_prog_filename, const string& 
     // Grab the Loss node
     Node *loss_node = dfg->get_loss_node();
     string loss_var_name = dfg->get_loss_var_name();
+    cout << "loss var name: " << loss_var_name << endl;
 
     // Iterate through the sorted nodes
     // Define partial/loss/partial/current = partial/loss/partial/parent * partial/parent/partial/current
     // Define partial/current/partial/child using basic differentiation
     for (list<Node *>::iterator it = top_sorted_nodes->begin(); it != top_sorted_nodes->end(); ++it) {
+        
         Node *curr_node = *it;
-        char partial_lambda_var_name[MAX_GCP_VAR_NAME_LENGTH];
-
+        
         // Checks if the current node is a child of the Loss node. 
         // Consider node x, a child of the Loss node.
         // The loss node will have alreay defined partial/loss/partial/x.
@@ -628,53 +140,35 @@ int Compiler::compile_pass_two(const string& shape_prog_filename, const string& 
 }
 
 
-int Compiler::parse_line(char line[]) {
+int Compiler::parse_line(const string& line) {
 
-    if (!line) {
-        return INVALID_LINE;
-    }
-    if (strcmp(line, "") == 0) {
-        return 0;
-    }
+    if (line.compare("") == 0) return 0;
+
+    // tokenize the line
+    vector<string> *tokens = new vector<string>();
+    int num_tokens = tokenize_line(line, tokens, " ");
+    if (num_tokens < 3) return INVALID_LINE;
 
     // Grab the first token of the instruction (first token in the line).
     // Use this to determine what actions to take.
-    char *first_token = strtok(line, " ");
-    if (first_token == NULL) {
-        return INVALID_LINE;
-    }
+    InstructionType inst_type = get_instruction_type(tokens->at(0));
+    if (inst_type == InstructionType::INVALID_INST) return INVALID_LINE;
 
-    InstructionType inst_type = get_instruction_type(string(first_token));
-    if (inst_type == InstructionType::INVALID_INST) {
-        return INVALID_LINE;
-    }
-
-    char *v_name, *v_type;
     string var_name;
     VariableType var_type;
 
     // If the line is a declaration of a variable,
     // simply create a new node, set the variable type, and add it to graph.
     if (inst_type == InstructionType::DECLARE) {
+        
+        if (num_tokens != 3) return INVALID_LINE;
         // grab the variable type
-        v_type = strtok(NULL, " ");
-        if (v_type == NULL) {
-            return INVALID_LINE;
-        }
-        var_type = get_variable_type(string(v_type));
-        if (var_type == VariableType::INVALID_VAR_TYPE) {
-            return INVALID_LINE;
-        }
+        var_type = get_variable_type(tokens->at(1));
+        if (var_type == VariableType::INVALID_VAR_TYPE) return INVALID_LINE;
 
         // grab the variable name
-        v_name = strtok(NULL, " ");
-        if (v_name == NULL) {
-            return INVALID_LINE;
-        }
-        var_name = string(v_name);
-        if (!is_valid_var_name(var_name)) {
-            return INVALID_VAR_NAME;
-        }
+        var_name = tokens->at(2);
+        if (!is_valid_var_name(var_name)) return INVALID_VAR_NAME;
 
         Node *new_node = new Node(var_name, false);
         new_node->set_type(var_type);
@@ -683,62 +177,66 @@ int Compiler::parse_line(char line[]) {
     } 
 
     // If the instruction is an expression that defines a variable:
-    // Update the "operation" field of the variable's node to be "add" or "mul".
+    // Update the "operation" field of the variable's node.
     // Create the two-way binding between the operands (children) and the current (parent) node. 
     else if (inst_type == InstructionType::DEFINE) {
 
-        // grab the variable name
-        v_name = strtok(NULL, " ");
-        if (v_name == NULL) {
-            return INVALID_LINE;
-        }
-        var_name = string(v_name);
-        if (!is_valid_var_name(var_name)) {
-            return INVALID_VAR_NAME;
-        }
+        if (num_tokens < 4) return INVALID_LINE;
 
+        // grab the variable name
+        var_name = tokens->at(1);
+        if (!is_valid_var_name(var_name)) return INVALID_VAR_NAME;
 
         // grab the node with this name
         Node *node = dfg->get_node(var_name);
+        if (node == NULL) return INVALID_LINE;
 
-        // grab the operation and set the node's operation
-        char *equal_sign = strtok(NULL, " ");
-        if (equal_sign == NULL) {
-            return INVALID_LINE;
+        bool success = false;
+
+        // grab the token after the equals sign
+        // act based on the value of this token
+        // A variable can defined as a constant, as equivalent to another variable,
+        //  or as a function of one or two operands (the operands may be other variables or floats)
+        string fourth_token = tokens->at(3);
+
+        // if the variable is being defined as a constant c, define it as "add c 0"
+        if (is_constant(fourth_token)) {
+            node->set_operation(OperationType::ADD);
+            success = dfg->add_flow_edge(fourth_token, var_name);
+            success = success && dfg->add_flow_edge("0", var_name);
         }
 
-        // over here grab token after equals. add cases for if it's a constant or another variable name
+        // if the variable is being defined as equivalent to another variable y, define it as "add y 0"
+        // we can be certain this will not create a cycle.
+        // if y was a function of x, or y's operands were a function of v, then this means:
+        // 1. v has already been defined, or 2. v is an input/weight/exp_output variable.
+        // In either case, the current line is then invalid.
+        // We trust the Preprocessor won't define variables in this cyclic manner.
         
-
-
-        char *op = strtok(NULL, " ");
-        if (op == NULL) {
-            return INVALID_LINE;
-        }
-        OperationType operation = get_operation_type(string(op));
-        if (operation == OperationType::INVALID_OPERATION) {
-            return INVALID_LINE;
-        }
-        node->set_operation(operation);
-
-        char *op1 = strtok(NULL, " ");
-        if (!op1) return INVALID_LINE;
-        string operand_1 = string(op1);
-
-        bool success;
-
-        if (operation == OperationType::LOGISTIC) {
-            success = dfg->add_flow_edge(operand_1, var_name);
-            return success;
+        else if (is_valid_var_name(fourth_token)) {
+            if (dfg->get_node(fourth_token) == NULL) return VAR_REFERENCED_BEFORE_DEFINED;
+            node->set_operation(OperationType::ADD);
+            success = dfg->add_flow_edge(fourth_token, var_name);
+            success = success && dfg->add_flow_edge("0", var_name);
         }
 
-        char *op2 = strtok(NULL, " ");
-        if (!op2) return INVALID_LINE;
-        string operand_2 = string(op2);
+        else if (is_unary_primitive(fourth_token)) {
+            if (num_tokens < 5) return INVALID_LINE;
+            node->set_operation(get_operation_type(fourth_token));
+            success = dfg->add_flow_edge(tokens->at(4), var_name);
+        }
 
-        success = dfg->add_flow_edge(operand_1, var_name);
-        success = success && dfg->add_flow_edge(operand_2, var_name);
-        return success;
+        else if (is_binary_primitive(fourth_token)) {
+            if (num_tokens < 6) return INVALID_LINE;
+            node->set_operation(get_operation_type(fourth_token));
+            success = dfg->add_flow_edge(tokens->at(4), var_name);
+            success = success && dfg->add_flow_edge(tokens->at(5), var_name);
+        }
+
+        else return INVALID_LINE;
+
+        return success? 0 : INVALID_LINE; 
+
     }
 
     return INVALID_LINE;
@@ -752,66 +250,66 @@ string generate_partial_var_name(const string& var1, const string& var2) {
     return string("d/").append(var1).append("/d/").append(var2);
 }
 
+string generate_intvar_name(const string& var_name, int intvar_num) {
+    return string(var_name).append("_").append(to_string(intvar_num));
+}
 
-string declare_partial_lambda(Node *node, string loss_name, ofstream &gcp) {
-    char line[MAX_LINE_LENGTH];
-    strcpy(line, "declare ");
+
+string declare_partial_lambda(Node *node, string loss_name, ofstream& gcp) {
+    
+    string line("declare ");
     if (node->get_type() == VariableType::WEIGHT) {
-        strcat(line, "output ");
+        line.append("output ");
     } else {
-        strcat(line, "intvar ");
+        line.append("intvar ");
     }
 
     string partial_name = generate_partial_var_name(loss_name, node->get_name());
-    strcat(line, partial_name.c_str());
-    gcp.write(line, strlen(line));
-    gcp.write("\n", 1);
-
+    line.append(partial_name);
+    gcp << line << endl;
     return partial_name;
 }
 
 
-void define_partial_lambda(Node *node, string loss_name, ofstream &gcp, string partial_var_name) {
-    char line[MAX_LINE_LENGTH];
-    strcpy(line, "define ");
-    strcat(line, partial_var_name.c_str());
-    strcat(line, " = ");
+void define_partial_lambda(Node *node, string loss_name, ofstream& gcp, string partial_var_name) {
+
+    string line("define ");
+    line.append(partial_var_name);
+    line.append(" = ");
 
     // partial(x, x) = 1 for any variable x.
-    // This usually applied when the given NODE is the loss node.
+    // This usually applies when the given NODE is the loss node.
     if (loss_name.compare(node->get_name()) == 0) {
-        strcat(line, "1");
+        line.append("1");
     }
 
     else {
         string partial_lambda_parent = generate_partial_var_name(loss_name, node->get_parent_name());
         string partial_parent_child = generate_partial_var_name(node->get_parent_name(), node->get_name());
 
-        strcat(line, "mul ");
-        strcat(line, partial_lambda_parent.c_str());
-        strcat(line, " ");
-        strcat(line, partial_parent_child.c_str());
+        line.append("mul ");
+        line.append(partial_lambda_parent);
+        line.append(" ");
+        line.append(partial_parent_child);
     }
 
-    gcp.write(line, strlen(line));
-    gcp.write("\n", 1);
+    gcp << line << endl;
 
 }
 
 
-string declare_child_one_partial(Node *node, ofstream &gcp) {
+string declare_child_one_partial(Node *node, ofstream& gcp) {
+
     int num_children = node->get_num_children();
-    char line[MAX_LINE_LENGTH];
+    string line;
 
     // make sure there is a first child and it's not a constant(float) node
     if (num_children >= 1 && !node->get_child_one()->is_constant()) {
-        strcpy(line, "declare intvar ");
+        line = "declare intvar ";
         string child_one_partial = generate_partial_var_name(node->get_name(), node->get_child_one_name());
-        strcat(line, child_one_partial.c_str());
+        line.append(child_one_partial);
         
-        gcp.write(line, strlen(line));
-        gcp.write("\n", 1);
-        
+        gcp << line << endl;
         return child_one_partial;
     }
 
@@ -820,19 +318,18 @@ string declare_child_one_partial(Node *node, ofstream &gcp) {
 }
 
 
-string declare_child_two_partial(Node *node, ofstream &gcp) {
+string declare_child_two_partial(Node *node, ofstream& gcp) {
+
     int num_children = node->get_num_children();
-    char line[MAX_LINE_LENGTH];
+    string line;
 
     // make sure there is a second child, it's not a constant(float) node, and it's different from the first child
     if (num_children >= 2 && node->get_child_one_name().compare(node->get_child_two_name()) != 0 && !node->get_child_two()->is_constant()) {
-        strcpy(line, "declare intvar ");
+        line = "declare intvar ";
         string child_two_partial = generate_partial_var_name(node->get_name(), node->get_child_two_name());
-        strcat(line, child_two_partial.c_str());
+        line.append(child_two_partial);
         
-        gcp.write(line, strlen(line));
-        gcp.write("\n", 1);
-        
+        gcp << line << endl;        
         return child_two_partial;
     }
 
@@ -841,153 +338,175 @@ string declare_child_two_partial(Node *node, ofstream &gcp) {
 }
 
 
-void define_child_one_partial(Node *node, ofstream &gcp, string child_one_partial) {
-    char line[MAX_LINE_LENGTH];
-    strcpy(line, "define ");
-    strcat(line, child_one_partial.c_str());
-    strcat(line, " = ");
+void define_child_one_partial(Node *node, ofstream& gcp, string child_one_partial) {
+
+    OperationType node_oper = node->get_operation();
+    if (node_oper == OperationType::INVALID_OPERATION) return;
 
     // if c = a + b, partial(c, a) = 1
-    if (node->get_operation() == OperationType::ADD) {
-        strcat(line, "1");
+    if (node_oper == OperationType::ADD) {
+        gcp << "define " + child_one_partial + " = 1" << endl;
     }
-    else if (node->get_operation() == OperationType::MUL) {
+
+    else if (node_oper == OperationType::MUL) {
+
         // if c = a * a, partial(c, a) = 2a
         if (node->get_child_one_name().compare(node->get_child_two_name()) == 0) {
-            strcat(line, "mul 2 ");
-            strcat(line, node->get_child_one_name().c_str());
+            gcp << "define " + child_one_partial + " = mul 2 " + node->get_child_one_name() << endl;
         } 
         // if c = a * b, where b != a, partial(c, a) = b
         else {
-            strcat(line, node->get_child_two_name().c_str());
+            gcp << "define " + child_one_partial + " = " + node->get_child_two_name() << endl;
         }
-    } else if (node->get_operation() == OperationType::LOGISTIC) {
-        strcat(line, "deriv_logistic ");
-        strcat(line, node->get_child_one_name().c_str());
+    } 
+
+    // if c = logistic a, partial(c, a) = e^a / ((1 + e^a) ^ 2)
+    else if (node_oper == OperationType::LOGISTIC) {
+
+        string intvars[4];
+        intvars[0] = generate_intvar_name(child_one_partial, 1); intvars[1] = generate_intvar_name(child_one_partial, 2);
+        intvars[2] = generate_intvar_name(child_one_partial, 3); intvars[3] = generate_intvar_name(child_one_partial, 4);
+        for (int i = 0; i < 4; i++) gcp << "declare intvar " + intvars[i] << endl;
+
+        // say f = logistic x
+        gcp << "define " + intvars[0] + " = exp " + node->get_child_one_name() << endl;             // d/f/d/x_1 = e^x
+        gcp << "define " + intvars[1] + " = add 1 " + intvars[0] << endl;                           // d/f/d/x_2 = 1 + d/f/d/x_1
+        gcp << "define " + intvars[2] + " = pow " + intvars[1] + " 2" << endl;                      // d/f/d/x_3 = (d/f/d/x_2)^2
+        gcp << "define " + intvars[3] + " = pow " + intvars[2] + " -1" << endl;                     // d/f/d/x_4 = 1 / d/f/d/x_3 
+
+        gcp << "define " + child_one_partial + " = mul " + intvars[0] + " " + intvars[3] << endl;   // d/f/d/x = d/f/d/x_1 * d/f/d/x_4
     }
 
-    gcp.write(line, strlen(line));
-    gcp.write("\n", 1);
+    // if c = e^a, partial(c, a) = e^a
+    else if (node_oper == OperationType::EXP) {
+        gcp << "define " + child_one_partial + " = exp " + node->get_child_one_name() << endl;
+    }
+
+    // if c = ln a, partial(c, a) = 1/a
+    else if (node_oper == OperationType::LN) {
+        gcp << "define " + child_one_partial + " = pow " + node->get_child_one_name() + " -1" << endl;
+    }
+
+    // if c = a^b, partial(c, a) = b * a^(b - 1)
+    else if (node_oper == OperationType::POW) {
+        string intvars[2];
+        intvars[0] = generate_intvar_name(child_one_partial, 1); intvars[1] = generate_intvar_name(child_one_partial, 2);
+        for (int i = 0; i < 2; i++) gcp << "declare intvar " + intvars[i] << endl;
+
+        // say f = pow x y
+        gcp << "define " + intvars[0] + " = add -1 " + node->get_child_two_name() << endl;                          // d/f/d/x_1 = y - 1 
+        gcp << "define " + intvars[1] + " = pow " + node->get_child_one_name() + " " + intvars[0] << endl;       // d/f/d/x_2 = x ^ d/f/d/x_1
+
+        gcp << "define " + child_one_partial + " = mul " + node->get_child_two_name() + " " + intvars[1] << endl;   // d/f/d/x = y * d/f/d/x_2
+
+    }
+
 }
 
 
-void define_child_two_partial(Node *node, ofstream &gcp, string child_two_partial) {
-    char line[MAX_LINE_LENGTH];
-    strcpy(line, "define ");
-    strcat(line, child_two_partial.c_str());
-    strcat(line, " = ");
+void define_child_two_partial(Node *node, ofstream& gcp, string child_two_partial) {
+     
+    OperationType node_oper = node->get_operation();
+    if (node_oper == OperationType::INVALID_OPERATION) return;
 
     // if c = a + b, partial(c, b) = 1
-    if (node->get_operation() == OperationType::ADD) {
-        strcat(line, "1");
+    if (node_oper == OperationType::ADD) {
+        gcp << "define " + child_two_partial + " = 1" << endl;
     }
-    else if (node->get_operation() == OperationType::MUL) {
+
+    else if (node_oper == OperationType::MUL) {
+
         // if c = b * b, partial(c, b) = 2b
         if (node->get_child_one_name().compare(node->get_child_two_name()) == 0) {
-            strcat(line, "mul 2");
-            strcat(line, node->get_child_two_name().c_str());
+            gcp << "define " + child_two_partial + " = mul 2 " + node->get_child_two_name() << endl;
         } 
         // if c = a * b, where b != a, partial(c, b) = a
         else {
-            strcat(line, node->get_child_one_name().c_str());
+            gcp << "define " + child_two_partial + " = " + node->get_child_one_name() << endl;
         }
-    } else if (node->get_operation() == OperationType::LOGISTIC) {
-        strcat(line, "deriv_logistic ");
-        strcat(line, node->get_child_two_name().c_str());
-    }
+    } 
 
-    gcp.write(line, strlen(line));
-    gcp.write("\n", 1);
+    // if c = a^b, partial(c, b) = a^b * ln(a)
+    else if (node_oper == OperationType::POW) {
+        string intvars[2];
+        intvars[0] = generate_intvar_name(child_two_partial, 1); intvars[1] = generate_intvar_name(child_two_partial, 2);
+        for (int i = 0; i < 2; i++) gcp << "declare intvar " << intvars[i] << endl;
+
+        // say f = pow x y
+        gcp << "define " + intvars[0] + " = pow " + node->get_child_one_name() + " " + node->get_child_two_name() << endl;     // d/f/d/y_1 = x^y 
+        gcp << "define " + intvars[1] + " = ln " + node->get_child_one_name() << endl;                                          // d/f/d/y_2 = ln(x)
+
+        gcp << "define " + child_two_partial + " = mul " + intvars[0] + " " + intvars[1] << endl;   // d/f/d/y = d/f/d/y_1 * d/f/d/y_2
+
+    }
 }
 
-int Compiler::duplicate_line_for_gcp(char shape_line[], char gcp_line[]) {
-    
-    if (shape_line == NULL || gcp_line == NULL) {
-        cout << "MULL" << endl;
-        return OTHER_ERROR;
-    }
-    if (strcmp(shape_line, "") == 0) {
-        return DUPLICATE_SUCCESS_EMPTY_LINE;
-    }
 
-    cout << "shape line: " << shape_line << endl;
+int Compiler::duplicate_line_for_gcp(const string& shape_line, string *gcp_duplicate_line) {
+    
+    if (gcp_duplicate_line == NULL) return OTHER_ERROR;
+    if (shape_line.compare("") == 0) return DUPLICATE_SUCCESS_EMPTY_LINE;
+
+    // tokenize the shape line
+    vector<string> *tokens = new vector<string> ();
+    int num_tokens = tokenize_line(shape_line, tokens, " ");
+    if (num_tokens < 3) return INVALID_LINE;
+    
     // determine instruction type
-    char *first_token = strtok(shape_line, " ");
-    if (first_token == NULL) {
-        return INVALID_LINE;
-    }
-    InstructionType inst_type = get_instruction_type(string(first_token));
-    if (inst_type == InstructionType::INVALID_INST) {
-        return INVALID_LINE;
-    }
+    InstructionType inst_type = get_instruction_type(tokens->at(0));
+    if (inst_type == InstructionType::INVALID_INST) return INVALID_LINE;
 
 
     // If define, make sure we're not defining an input, weight or exp_output
     if (inst_type == InstructionType::DEFINE) {
-        
-        // grab name
-        char *v_name = strtok(NULL, " ");
-        if (v_name == NULL) {
-            return INVALID_VAR_NAME;
-        }
-        string var_name(v_name);
-
-        // grab variable type from DFG
-        // cannot define a variable without declaring it first
-        Node *var_node = dfg->get_node(var_name);
-        if (var_node == NULL) {
-            return VAR_DEFINED_BEFORE_DECLARED;
-        }
-        VariableType var_type = var_node->get_type();
-
-        // cannot define an input, weight or exp_output
-        if (var_type == VariableType::INVALID_VAR_TYPE || var_type == VariableType::INPUT
-            || var_type == VariableType::WEIGHT || var_type == VariableType::EXP_OUTPUT) {
-            return CANNOT_DEFINE_I_W_EO;
-        }
-
-        // do more checks before returning
+        *gcp_duplicate_line = shape_line;
         return DUPLICATE_SUCCESS_DEFINE;
     }
 
     // If declare, change type appropriately
     if (inst_type == InstructionType::DECLARE) {
-        cout << "A" << endl;
-        char *v_type = strtok(NULL, " ");
-        if (v_type == NULL) {
-            return INVALID_LINE;
-        }
-        VariableType var_type = get_variable_type(string(v_type));
 
-        if (var_type == VariableType::INVALID_VAR_TYPE) {
-            return INVALID_LINE;
-        }
+        if (num_tokens != 3) return INVALID_LINE;
+        VariableType var_type = get_variable_type(tokens->at(1));
+        if (var_type == VariableType::INVALID_VAR_TYPE) return INVALID_LINE;
 
-        char gcp_var_type[50];
+        string gcp_var_type;
         if (var_type == VariableType::INPUT || var_type == VariableType::WEIGHT ||var_type == VariableType::EXP_OUTPUT) {
-            strcpy(gcp_var_type, "input");
+            gcp_var_type = "input";
         } else {
-            strcpy(gcp_var_type, "intvar");
-        }
-        cout << "B" << endl;
-        char *v_name = strtok(NULL, " ");
-        if (v_name == NULL) {
-            return INVALID_VAR_NAME;
+            gcp_var_type = "intvar";
         }
 
-        // The line should be over now
-        if (strtok(NULL, " ") != NULL) {
-            return INVALID_LINE;
-        }
-        cout << "C" << endl;
-        strcpy(gcp_line, "declare ");
-        strcat(gcp_line, gcp_var_type);
-        strcat(gcp_line, " ");
-        strcat(gcp_line, v_name);
-        cout << "gcp line: " << gcp_line << endl;
+        string var_name = tokens->at(2);
+        
+        *gcp_duplicate_line = "declare ";
+        gcp_duplicate_line->append(gcp_var_type + " ");
+        gcp_duplicate_line->append(var_name);
         return DUPLICATE_SUCCESS_DECLARE;
-        // null terminator?
     }
 
     return INVALID_LINE;
+}
+
+
+
+
+
+int main(int argc, char *argv[]) {
+
+    Node *a = new Node("a", false); 
+    Node *b = new Node("-7", true);
+    Node *c = new Node("c", false);
+    c->set_operation(OperationType::LN);
+    c->set_child(a);
+    //c->set_child(b);
+
+    ofstream gcp("foo.tf");
+
+    string partial1 = declare_child_one_partial(c, gcp);
+    string partial2 = declare_child_two_partial(c, gcp);
+    if (partial1.compare("") != 0) define_child_one_partial(c, gcp, partial1);
+    if (partial2.compare("") != 0) define_child_two_partial(c, gcp, partial2);
+
+    
 }

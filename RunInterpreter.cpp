@@ -13,6 +13,7 @@ int main(int argc, char *argv[]) {
 	inputs.insert(make_pair("y", 4));
 	i.interpret("shape_prog.tf", inputs, &outputs);
 
+	cout << endl << endl;
 	for (unordered_map<string, float>::iterator it = outputs.begin(); it != outputs.end(); ++it) {
 		cout << "Var: " << it->first << ", Value: " << it->second << endl;
 	}

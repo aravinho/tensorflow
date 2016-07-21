@@ -62,7 +62,7 @@ bool DataFlowGraph::add_flow_edge(const string& child_name, const string& parent
 		return false;
 	}
 
-	Node *child;
+	Node *child; 
 	if (is_constant(child_name)) {
 		child = new Node(string(child_name), true);
 	} else {

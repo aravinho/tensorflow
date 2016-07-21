@@ -11,7 +11,7 @@ using namespace std;
 
 /* These delimiters separate tokens in a line of TenFlang code. 
  */
-const char delimiters[3] = " \t";
+const string delimiters = " \t";
 
 /* Represents a user-defined macro. */
 struct macro {
@@ -106,15 +106,15 @@ public:
      */
     int expand_program(const string& shape_prog_filename, const string& expanded_shape_prog_filename);
 
-    /* Populates the expanded_prog_lines vector with the appropriate expansion of prog_line.
+    /* Writes the appropriate expansion of PROG_LINE into EXP_PROG.
      * See the comment for the expand_program for details on what "expansion" entails.
-     * If no expansion is needed, then the line is copied directly into the zeroth string of the expanded_prog_lines array.
+     * If no expansion is needed, then the line is copied directly into EXP_PROG.
      *
-     * Returns the number of lines copied into expanded_prog_lines.
+     * Returns the number of lines written to exp_prog.
      * This is 1 if no expansion was needed, and the appropriate error code (see utilities.h) if the given line was invalid.
      * Returns 0 if prog_line is an empty line.
      */
-    int expand_line(vector<string> *expanded_prog_lines, char prog_line[]); 
+    int Preprocessor::expand_line(const string& prog_line, ofstream& exp_prog); 
 
 
 
@@ -122,7 +122,7 @@ public:
 
 
 
-     /* Expands a DECLARE_VECTOR instruction, copying the expanded lines into EXPANDED_PROG_LINES.
+     /* Expands a DECLARE_VECTOR instruction, copying the expanded lines into EXP_PROG.
      * The declare_vector instruction gets broken down into as many regular declare instructions as there are elements in the vector.
      *
      * ex. "declare_vector input x[3]" becomes:
@@ -132,9 +132,9 @@ public:
      *
      * This method returns the dimension of the vector, which will always be a positive integer.
      */
-    int expand_declare_vector_instruction(char *tokens[], vector<string> *expanded_prog_lines);
+    int expand_declare_vector_instruction(const string& line, ofstream& exp_prog);
 
-    /* Expands a DEFINE instruction, copying the expanded lines into EXPANDED_PROG_LINES.
+    /* Expands a DEFINE instruction, copying the expanded lines into EXP_PROG.
      * DEFINE instructions need expanding if they involve vector operations or user-defined macros.
      * Vector operations are expanded into component wise operations (see vector expansion methods below).
      * Macro instructions are expanded directly based on the user given macro (see expand_unary_macro and expand_binary_macro).
@@ -142,7 +142,7 @@ public:
      * If the instruction requires no expanding, nothing is done and 0 is returned.
      * Otherwise, this method returns the number of expanded lines.
      */
-    int expand_define_instruction(char *tokens[], int num_tokens, vector<string> *expanded_prog_lines);
+    int expand_define_instruction(const string& line, ofstream& exp_prog);
 
     /* This method expands a DEFINE instruction that defines a variable/vector as the result of a vector operation.
 	 * RESULT is the variable/vector being defined, and OPERAND1 and OPERAND2 are the operand vectors/constants/variables.
@@ -150,11 +150,11 @@ public:
 	 * Based on the given OPER_TYPE, this method dispatches the work to the appropriate expansion method.
 	 * See specific vector operation expansion methods below.
 	 *
-	 * The expanded lines are written into EXPANDED_PROG_LINES.
+	 * The expanded lines are written into EXP_PROG.
 	 * Returns the number of expanded lines.
 	 */
 	int expand_vector_instruction(const OperationType& oper_type, const string& result, const string& operand1, const string& operand2,
-    	vector<string> *expanded_prog_lines);
+    	ofstream& exp_prog);
 
 
 	/* ------------------------------------ Helper Macro Expansion Methods ----------------------------------- */
@@ -166,17 +166,17 @@ public:
      * Recall this struct was created during the parsing of the macro definitions.
      * Replaces the current instruction with the appropriate sequence of instructions as stored in the macro struct.
      * Replaces the dummy variable names with the given OPERAND and RESULT names.
-     * Writes the expanded instructions into EXPANDED_PROG_LINES.
+     * Writes the expanded instructions into EXP_PROG.
      *
      * Returns the number of expanded lines.
      */
     int expand_unary_macro(const string& macro_name, const string& operand, const string& result, 
-    	vector<string> *expanded_prog_lines);
+    	ofstream& exp_prog);
 
     /* Does the same thing as expand_unary_macro, but for a binary macro.
      */
 	int expand_binary_macro(const string& macro_name, const string& operand1, const string& operand2, const string& result, 
-    	vector<string> *expanded_prog_lines);
+    	ofstream& exp_prog);
 
 	/* Replaces all the dummy variable names in DUMMY_LINE with the appropriate argument names RESULT, OPERAND1, and OPERAND2.
 	 * For example, "substitute_dummy_names('define r = mul p q', r, p, q, z, x, y)" would return 'define z = mul x y'
@@ -215,11 +215,11 @@ public:
      * "define dot_prod.2 = mul a.2 b.2"
      * "define dot_prod = add dot_prod.1 dot_prod.2"
      *
-     * The expanded lines are written into EXPANDED_PROG_LINES.
+     * The expanded lines are written into EXP_PROG.
      * Returns the number of expanded lines.
      */
 	int expand_dot_product_instruction(const string& result, const string& vector1, const string& vector2, int dimension,
-    	vector<string> *expanded_prog_lines);
+    	ofstream& exp_prog);
 
 	/* Expands a DEFINE instruction that defines a vector RESULT_VEC as the result of component-wise addition between VECTOR1 and VECTOR2.
      * This operation gets broken up into several scalar additions.
@@ -228,11 +228,11 @@ public:
      * "define sum_vec.1 = add a.1 b.1"
      * "define sum_vec.2 = add a.2 b.2"
      *
-     * The expanded lines are written into EXPANDED_PROG_LINES.
+     * The expanded lines are written into EXP_PROG.
      * Returns the number of expanded lines.
      */
 	int expand_component_wise_add_instruction(const string& result_vec, const string& vector1, const string& vector2, int dimension, 
-    	vector<string> *expanded_prog_lines);
+    	ofstream& exp_prog);
 
 	/* Expands a DEFINE instruction that defines a vector RESULT_VEC as the result of component-wise multiplication between VECTOR1 and VECTOR2.
      * This operation gets broken up into several scalar multiplications.
@@ -241,11 +241,11 @@ public:
      * "define prod_vec.1 = mul a.1 b.1"
      * "define prod_vec.2 = mul a.2 b.2"
      *
-     * The expanded lines are written into EXPANDED_PROG_LINES.
+     * The expanded lines are written into EXP_PROG.
      * Returns the number of expanded lines.
      */
 	int expand_component_wise_mul_instruction(const string& result_vec, const string& vector1, const string& vector2, int dimension, 
-    	vector<string> *expanded_prog_lines);
+    	ofstream& exp_prog);
 
 	/* Expands a DEFINE instruction that defines a vector RESULT_VEC as the result scaling VECTOR by the given SCALING_FACTOR.
 	 * The scaling factor could be a variable or a constant.
@@ -257,11 +257,11 @@ public:
 	 *
      * (Assume scaled_vec and a have been declared as two-element vectors, and s has been declared and defined.)
      *
-     * The expanded lines are written into EXPANDED_PROG_LINES.
+     * The expanded lines are written into EXP_PROG.
      * Returns the number of expanded lines.
      */
 	int expand_scale_vector_instruction(const string& result_vec, const string& vector1, const string& scaling_factor, int dimension,
-		vector<string> *expanded_prog_lines);
+		ofstream& exp_prog);
 
 	/* Expands a DEFINE instruction that defines a vector RESULT_VEC as the result incrementing each component in VECTOR by the given INCREMENTING_FACTOR.
 	 * The incrementing factor could be a variable or a constant.
@@ -273,11 +273,11 @@ public:
 	 *
      * (Assume incr_vec and a have been declared as two-element vectors, and s has been declared and defined.)
      *
-     * The expanded lines are written into EXPANDED_PROG_LINES.
+     * The expanded lines are written into EXP_PROG.
      * Returns the number of expanded lines.
      */
 	int expand_increment_vector_instruction(const string& result_vec, const string& vector1, const string& incrementing_factor, int dimension, 
-    	vector<string> *expanded_prog_lines);
+    	ofstream& exp_prog);
 
 
 
@@ -296,7 +296,7 @@ public:
 	 *
 	 * Returns 0 on success, or an error code if the macro definition is invalid (see utilities.h).
 	 */
-	int parse_macro_line(char macro_line[], struct macro *macro);
+	int parse_macro_line(const string& macro_line, struct macro *macro);
 
 	/* Parses the first line a macro.
 	 * Stores the name of the macro, the dummy result name, and the dummy operand names in the macro struct.
@@ -305,14 +305,14 @@ public:
 	 * 
 	 * Returns 0 on success, or an error code if the line is invalid.
 	 */
-	int parse_macro_first_line(char first_line[], struct macro *macro);
+	int parse_macro_first_line(const string& first_line, struct macro *macro);
 
 	/* Parses a subsequent (not the first) line of a macro.
 	 * If the line is valid, adds it to the vector of lines in the MACRO struct.
 	 *
 	 * Returns 0 on success, or an error code if the line is invalid.
 	 */
-	int parse_macro_subsequent_line(char line[], struct macro *macro);
+	int parse_macro_subsequent_line(const string& line, struct macro *macro);
 
 	
 

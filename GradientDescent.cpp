@@ -8,15 +8,6 @@
 
 using namespace std;
 
-// FIX ADD_VARIABLE_VECTORS LINE. needs to add scaled partial to weight. tokenize partial names to find which weight the pertain to.
-
-/*calculate_weights(GCP, training_data):
-	weight_vec = initial_guess()
-	grad = avg_gradient(GCP, weight_vec, training_data)
-	while !(grad  0):
-		increment_vec(weight_vec, -*grad)
-		grad = avg_gradient(GCP, weight_vec, training_data)
-	return weight_vec*/
 
 VariableVector calculate_weights(const string& gcp_filename, const vector<string>& weight_names, const vector<string>& partial_names, const vector<pair<VariableVector, VariableVector> >& training_data) {
 
@@ -31,7 +22,6 @@ VariableVector calculate_weights(const string& gcp_filename, const vector<string
 	int num_iterations = 0;
 
 	while (!approx_zero(gradient, partial_names) && num_iterations < MAX_NUM_ITERATIONS) {
-		//weights = add_variable_vectors(weights, scale_variable_vector(gradient, -1 * LEARNING_RATE));
 		weights = increment_weight_vector(weights, scale_variable_vector(gradient, -1 * LEARNING_RATE));
 		gradient = avg_gradient(gcp_filename, partial_names, weights, training_data);
 		num_iterations++;
@@ -257,9 +247,9 @@ int find_partials(const string& gcp_filename, VariableVector *partials,
 	VariableVector inputs_to_interpreter = variable_vector_union(weights, variable_vector_union(inputs, outputs));
 
 	Interpreter i;
-	i.interpret(gcp_filename, inputs_to_interpreter, partials);
+	int success = i.interpret(gcp_filename, inputs_to_interpreter, partials);
 
-	return 0;
+	return success;
 
 }
 

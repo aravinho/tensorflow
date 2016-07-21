@@ -2,6 +2,7 @@
 #define UTILITIES_H
 
 #include <string>
+#include <vector>
 
 using namespace std;
 
@@ -66,7 +67,7 @@ enum class VariableType {
     INVALID_VAR_TYPE
 };
 
-/* There are two operations, addition and multiplication.
+/* These are differentiable unary or binary operations.
  * More differentiable operations will be added.
  */
 enum class OperationType {
@@ -74,14 +75,28 @@ enum class OperationType {
     MUL,
     DOT,
     LOGISTIC,
-    DERIV_LOGISTIC,
-    RECIPROCAL,
+    EXP,
     POW,
+    LN,
     SCALE_VECTOR,
     INCREMENT_VECTOR,
     COMPONENT_WISE_ADD,
     COMPONENT_WISE_MUL,
     INVALID_OPERATION
+};
+
+/* These operations are used to calculate derivatives of the operations above.
+ * DERIV_LOGISTIC and DERIV_POW are not allowed in a user program.
+ * These operations are only allowed in a GCP.
+ */
+enum class DerivativeOperationType {
+    ADD,
+    MUL,
+    DERIV_LOGISTIC,
+    EXP,
+    DERIV_POW,
+    LN,
+    INVALID_DERIV_OPERATION
 };
 
 
@@ -90,6 +105,7 @@ enum class OperationType {
 InstructionType get_instruction_type(const std::string &inst_type);
 VariableType get_variable_type(const string &var_type);
 OperationType get_operation_type(const string &oper);
+DerivativeOperationType get_derivative_operation_type(const string& oper);
 
 
 
@@ -117,36 +133,37 @@ bool invalid_file_name(const string& filename);
  */
 bool is_valid_var_name(const string& name);
 
-/* Returns true if the given name is a valid operation and false otherwise.
- */
+/* Returns true if the given name is a valid operation and false otherwise. */
 bool is_valid_operation(const string& oper_name);
 
-/* Returns true if the given name is a valid primitive instruction type and false otherwise.
-*/
+/* Returns true if the given name is a valid instruction type and false otherwise. */
 bool is_valid_instruction(const string& inst_name);
 
-/* Returns true if the given name is a valid primitive instruction, and false otherwise.
- */
+/* Returns true if the given name is a valid derivative operation, and false otherwise. */
+bool is_valid_deriv_operation(const string& oper_name);
+
+/* Returns true if the given name is a valid primitive instruction, and false otherwise. */
 bool is_valid_primitive(const string& name);
 
-/* Returns true if the given name is a valid vector operation, and false otherwise.
- */
+/* Returns true if the given name is a valid vector operation, and false otherwise. */
 bool is_valid_vector_operation(const string& name);
 
-/* Returns true if the given name is a binary primitive, and false otherwise.
- */
+/* Returns true if the given name is a binary primitive, and false otherwise. */
 bool is_binary_primitive(const string& name);
 
-/* Returns true if the given name is a unary primitive, and false otherwise.
- */
+/* Returns true if the given name is a unary primitive, and false otherwise. */
 bool is_unary_primitive(const string& name);
 
-/* Returns true if the given name is a binary vector operation, and false otherwise.
- */
+/* Returns true if the given name is a binary derivative operation, and false otherwise. */
+bool is_binary_deriv_operation(const string& name);
+
+/* Returns true if the given name is a unary derivative operation, and false otherwise. */
+bool is_unary_deriv_operation(const string& name);
+
+/* Returns true if the given name is a binary vector operation, and false otherwise. */
 bool is_binary_vector_operation(const string& name);
 
-/* Returns true if the given name is a unary vector operation, and false otherwise.
- */
+/* Returns true if the given name is a unary vector operation, and false otherwise. */
 bool is_unary_vector_operation(const string& name);
 
 /* Returns true if the given size is a positive integer less than or equal to MAX_VECTOR_SIZE.
@@ -164,6 +181,16 @@ bool is_valid_macro_name(const string& name);
  *  the name of a variable type, or the equals sign.
  */
 bool is_keyword(const string& word);
+
+
+/* ------------------------ Tokenizer Method -------------------- */
+
+/* Populates the tokens vector with the tokens of LINE.
+ * Tokens are delimited by any character in the given DELIMITERS string.
+ *
+ * Returns the number of tokens, or an error code on failure (see utilities.h).
+ */
+int tokenize_line(const string& line, vector<string> *tokens, const string& delimiters);
 
 
 #endif

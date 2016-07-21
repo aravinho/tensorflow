@@ -10,10 +10,26 @@
 using namespace std;
 
 
+/* The Interpreter executes a TenFlang Program.
+ * Given a program and a set of inputs, the Interpreter evaluates the outputs of the program.
+ * 
+ * The Interpreter works by maintaining a BindingsDictionary.
+ * The BindingsDictionary contains mapping from variable names to their values.
+ * At every line that declares a variable, a dummy entry is inserted nto the BindingsDictionary.
+ * At every line that defines a variable, the variable's value is evaluated.
+ * The dummy entry for the variable is updated to store the variable's value.
+ *
+ * The Interpreter is a key component to the Weight Calculation Phase.
+ * The GCP is interpreted repeatedly with different combinations of weights and training data input.
+ *
+ * Before a program can be interpreted, it must be preprocessed by the Preprocessor.
+ * The interpreter can only deal with primitive operations, and not vector operations or user-defined macros.
+ */
+
 class Interpreter {
+
 	BindingsDictionary bindings;
 	unordered_map<string, VariableType>* var_types;
-	unordered_map<string, int>* vector_dimensions;
 
 public:
 
@@ -45,7 +61,7 @@ public:
 	 *
 	 * This method returns 0 on success, and the appropriate error code on failure (see utilities.h).
 	 */
-	int parse_line(char line[], const unordered_map<string, float>& inputs);
+	int parse_line(const string& line, const unordered_map<string, float>& inputs);
 
 };
 
@@ -59,20 +75,15 @@ public:
  * If one operand is FLT_MIN and the other is FLT_MAX, returns FLT_MIN.
  * If the given operation is invalid, returns FLT_MIN.
  */
-float apply_operation(OperationType operation, float operand1, float operand2);
+float apply_binary_operation(OperationType operation, float operand1, float operand2);
 
 /* Applies the given unary operation to the given operand and returns the resulting value.
- * This function is typically used for logistic or logistic-derivative operations.
  *
  * If the operand is FLT_MIN or the operation is invalid, returns FLT_MIN.
  * If the operand is FLT_MAX, returns FLT_MAX.
+ * If the given operation is invalid, returns FLT_MIN.
  */
 float apply_unary_operation(OperationType operation, float operand);
-
-/* Returns the dot product of the two vectors represented as arrays.
- */
-float apply_dot_product(float vec1[], float vec2[], int length);
-
 
 
 

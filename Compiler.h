@@ -1,6 +1,8 @@
 #ifndef COMPILER_H
 #define COMPILER_H
 
+#include <vector>
+
 #include "Node.h"
 #include "DataFlowGraph.h"
 #include "utilities.h"
@@ -9,7 +11,7 @@ using namespace std;
 
 /* These delimiters separate tokens in a line of TenFlang code. 
  */
-const char delimiters[3] = " \t";
+const string delimiters = " \t";
 
 /* The purpose of compilation is to translate the Shape Program into the Gradient Computing Program (GCP).
  * Compilation occurs in these three steps:
@@ -54,7 +56,7 @@ public:
      * 
      * Returns 0 on success, and the appropriate error code otherwise (see utilities.h).
      */
-    int compile_pass_two(const string& shape_prog_filename, const string& gcp_filename);
+    int compile(const string& shape_prog_filename, const string& gcp_filename);
 
 
     /* The first pass of Compilation breaks complex instructions into simpler primitives.
@@ -107,16 +109,16 @@ public:
      * This method returns 0 if the line was successfully parsed.
      * Returns the appropriate error code otherwise (see utilities.h).
      */
-    int parse_line(char line[]);
+    int parse_line(const string& line);
 
-    /* Populates gcp_line with a near duplicate of shape_line.
+    /* Populates GCP_DUPLICATE_LINE with a near duplicate of SHAPE_LINE.
      * The variable type may be changed, though.
      * Inputs, weights and expected outputs from the Shape Program all become inputs in the GCP.
      * Outputs, intvars, and loss variables from the Shape Program all become intvars in the GCP.
      * Returns DUPLICATE_SUCCESS_DECLARE or DUPLICATE_SUCCESS_DEFINE on success (see utilities.h).
      * Returns the appropriate error code (see utilities.h) on failure.
      */
-    int duplicate_line_for_gcp(char shape_line[], char gcp_line[]);
+    int duplicate_line_for_gcp(const string& shape_line, string *gcp_duplicate_line);
 
     /* Determines whether the given tokens form a valid DECLARE instruction.
      * In order to be valid, there must be exactly 3 tokens.
@@ -172,6 +174,15 @@ public:
  */
 string generate_partial_var_name(const string& var1, const string& var2);
 
+/* Returns a string that is the name of the INTVAR_NUM-th intvar of VAR_NAME.
+ * If var_name were "foo" and intvar_num were 2, this method would return "foo_2".
+ * This method is called when defining a partial derivative requires more than 1 line.
+ * For example, defining "d/foo/d/bar" where foo = logistic bar requires 4 intvars.
+ * These intvars represent e^bar, 1 + e^bar, (1 + e^bar)^2, and 1/(1 + e^bar)^2.
+ * These intvars would be named "d/foo/d/bar_1", "d/foo/d/bar_2", "d/foo/d/bar_3" and "d/foo/d/bar_4".
+ */
+string generate_intvar_name(const string& var_name, int intvar_num);
+
 /* Adds the declaration of a partial derivative to the GCP.
  * The variable is the partial derivative of the Loss variable with respect to the variable represented by the given node.
  * Returns the name of this variable.
@@ -201,14 +212,7 @@ string declare_child_two_partial(Node *node, ofstream &gcp);
 void define_child_one_partial(Node *node, ofstream &gcp, string child_one_partial);
 void define_child_two_partial(Node *node, ofstream &gcp, string child_two_partial);
 
-/* Populates the tokens array with the tokens of shape_line.
- * Tokens are delimited by a space or a tab.
- * Returns the number of tokens, or an error code on failure (see utilities.h).
- *
- * This function uses the strtok method to tokenize.
- * As a result, the shape_line char-pointer is mangled during the execution of this function.
- */
-int tokenize_line(char shape_line[], char *tokens[]);
+
 
 
 
