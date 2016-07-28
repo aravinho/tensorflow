@@ -58,48 +58,6 @@ public:
      */
     int compile(const string& shape_prog_filename, const string& gcp_filename);
 
-
-    /* The first pass of Compilation breaks complex instructions into simpler primitives.
-     * The declare_vector instruction gets broken down into as many regular declare instructions as there are elements in the vector.
-     *
-     * ex. "declare_vector input x[3]" becomes:
-     * "declare input x.1"
-     * "declare input x.2"
-     * "declare input x.3"
-     *
-     * Defintions of variables as the dot product of two vectors get broken up into several multiplications and additions.
-     *
-     * ex. "define_dot dot_prod = dot a b" becomes the following: (Assume dot_prod, a and b have been declared, and a and b are both two-element vectors.)
-     * "declare dot_prod.1"
-     * "declare dot_prod.2"
-     * "define dot_prod.1 = mul a.1 b.1"
-     * "define dot_prod.2 = mul a.2 b.2"
-     * "define dot_prod = add dot_prod.1 dot_prod.2"
-     *
-     * Definitions of variables as a logistic function of another variable stay the same.
-     * We will allow the logistic function to be a primitive. 
-     * 
-     * The first pass reads from the Shape Program, and writes to the Expanded Shape Program.
-     * The second pass will then compile the GCP from the Expanded Shape Program.
-     *
-     * Returns 0 on success, and the appropriate error code otherwise (see utilities.h).
-     */
-    int compile_pass_one(const string& shape_prog_filename, const string& expanded_shape_prog_filename);
-
-
-    /* Populates the expanded_shape_lines array with the appropriate expansion of shape_line.
-     * See the comment for compile_pass_one for details on what "expansion" entails.
-     * If no expansion is needed, then the Shape Line is copied directly into the first element of the expanded_shape_lines array.
-     *
-     * Returns the number of lines in expanded_shape_lines_array.
-     * This is 1 if no expansion was needed, and the appropriate error code (see utilities.h) if the given Shape Program line was invalid.
-     * Returns 0 if shape_line is an empty line.
-     */
-    int expand_shape_line(char expanded_shape_lines[MAX_EXPANSION_FACTOR][MAX_LINE_LENGTH], char shape_line[]);
-
-
-
-
     /* Reads one line of code, and takes the appropriate actions.
      * If the line is the declaration of a variable, a node is added to the Data Flow Graph.
      * If the line defines an expression for the variable, the respective node is updated.
@@ -111,14 +69,14 @@ public:
      */
     int parse_line(const string& line);
 
-    /* Populates GCP_DUPLICATE_LINE with a near duplicate of SHAPE_LINE.
-     * The variable type may be changed, though.
+    /* Writes a near duplicate of SHAPE_LINE into GCP.
+     * Define instructions are copied directly.
+     * For declare instructions, the variable type may be changed.
      * Inputs, weights and expected outputs from the Shape Program all become inputs in the GCP.
      * Outputs, intvars, and loss variables from the Shape Program all become intvars in the GCP.
-     * Returns DUPLICATE_SUCCESS_DECLARE or DUPLICATE_SUCCESS_DEFINE on success (see utilities.h).
-     * Returns the appropriate error code (see utilities.h) on failure.
+     * Returns 0 on success, or an error code (see utilities.h) on failure.
      */
-    int duplicate_line_for_gcp(const string& shape_line, string *gcp_duplicate_line);
+    int duplicate_line_for_gcp(const string& shape_line, ofstream& gcp);
 
     /* Determines whether the given tokens form a valid DECLARE instruction.
      * In order to be valid, there must be exactly 3 tokens.

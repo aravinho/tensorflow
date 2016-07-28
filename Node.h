@@ -2,9 +2,11 @@
 #define NODE_H
 
 #include <string>
+
 #include "utilities.h"
 
 using namespace std;
+
 
 /* A node in the Data Flow Graph.
  * This node represents a variable (or a constant) in the computation.
@@ -15,6 +17,7 @@ using namespace std;
 */
  
 class Node {
+
     string name;
     float constant_value;
     VariableType type;
@@ -46,6 +49,12 @@ public:
      */
     Node(string node_name, bool is_constant);
 
+    /* Destructor.
+     * Does not delete the parent and children Node pointers, unless they are constant Nodes.
+     * This is because the destructor for non-constant Nodes will eventually be called by the DFG destructor.
+     */
+     ~Node();
+
 
     /* -------------------- Getter and setter methods. ---------------------- */
 
@@ -53,16 +62,22 @@ public:
     void set_name(string new_name);
 
     VariableType get_type() const;
+    /* Constant nodes cannot have their type set. */
     void set_type(VariableType new_type);
     bool is_constant() const;
 
     OperationType get_operation() const;
+    /* Constant nodes cannot have their operation set. */
     void set_operation(OperationType new_operation);
 
     string get_parent_name() const;
     Node *get_parent() const;
 
-    /* Returns false if the given NEW_PARENT is NULL, and true otherwise. */
+    /* Returns false if the given NEW_PARENT is NULL or if NEW_PARENT is a constant node.
+     * Returns false if the given NEW_PARENT is an INPUT, WEIGHT or EXP_OUTPUT node.
+     * Returns false if this node is a loss node, unless NEW_PARENT is the current node.
+     *  (A loss node's parent is itself).
+     * Otherwise, sets this node's parent and parent_name fields and returns true. */
     bool set_parent(Node *new_parent);
 
 
@@ -75,6 +90,9 @@ public:
      * If the current node has no children, NEW_CHILD becomes Child 1.
      * If the current node has no children, NEW_CHILD becomes Child 2.
      * If the current node has two children already, this method returns false and nothing happens.
+     * If the current node is constant, this method returns false and nothing happens.
+     * If the current node is an INPUT, WEIGHT or EXP_OUTPUT node, returns false and nothing happens.
+     * If the given NEW_CHILD is a loss node, returns false and nothing happens.
      * This method returns true otherwise.
      */
     bool set_child(Node *new_child);
@@ -84,7 +102,9 @@ public:
 
     /* --------------- Helper Functions for Topological Sorting --------------- */
 
-
+    /* Clearing the mark sets it to 0.
+     * A temporary mark is 1, and a permanent mark is 2.
+     */
     int get_mark() const;
     void clear_mark();
     void temporary_mark();

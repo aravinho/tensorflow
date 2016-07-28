@@ -23,7 +23,7 @@ Interpreter::Interpreter() {
 
 int Interpreter::interpret(const string& filename, const unordered_map<string, float>& inputs, unordered_map<string, float> *outputs) {
 
-	if (invalid_file_name(filename)) {
+	if (!is_valid_file_name(filename)) {
 		cerr << "Could not interpret the file " << filename << endl;
 		return OTHER_ERROR;
 	}

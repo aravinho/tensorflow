@@ -23,11 +23,23 @@ Preprocessor::Preprocessor() {
 }
 
 
+Preprocessor::~Preprocessor() {
+    delete variables;
+    delete vectors;
+    delete vector_dimensions;
+    delete defined_variables;
+    for (unordered_map<string, struct macro*>::iterator it = macros->begin();
+        it != macros->end(); ++it) {
+
+        delete it->second;
+    }
+    delete macros;
+}
 /* ------------------------------- Main Methods ---------------------------- */
 
 int Preprocessor::expand_program(const string& prog_filename, const string& expanded_prog_filename) {
 
-    if (invalid_file_name(prog_filename)) {
+    if (!is_valid_file_name(prog_filename)) {
         cerr << "Invalid Program file name: " << prog_filename << endl;
         return INVALID_FILE_NAME;
     }
@@ -45,7 +57,7 @@ int Preprocessor::expand_program(const string& prog_filename, const string& expa
     // expand each line
     while(!prog.eof()) {
 
-        getline(prog, line);
+        getline(prog, prog_line);
         num_lines_expanded = expand_line(prog_line, exp_prog);
         if (num_lines_expanded < 0) return num_lines_expanded;
 
@@ -62,16 +74,16 @@ int Preprocessor::expand_program(const string& prog_filename, const string& expa
 int Preprocessor::expand_line(const string& prog_line, ofstream& exp_prog) {
     
     // edge error cases
-    if (prog_line == NULL) return OTHER_ERROR;
+    if (!exp_prog.is_open()) return OTHER_ERROR;
     if (prog_line.compare("") == 0) return 0;
 
     // tokenize the line
     vector<string> *tokens = new vector<string>();
-    int num_tokens = tokenize_line(line, tokens, " ");
+    int num_tokens = tokenize_line(prog_line, tokens, " ");
     if (num_tokens < 3) return INVALID_LINE;
 
     // grab the instruction type, and act accordingly
-    if (!is_valid_instruction(tokens->at(0)) return INVALID_LINE;
+    if (!is_valid_instruction(tokens->at(0))) return INVALID_LINE;
     InstructionType inst_type = get_instruction_type(tokens->at(0));
 
 
@@ -112,7 +124,7 @@ int Preprocessor::expand_line(const string& prog_line, ofstream& exp_prog) {
     if (inst_type == InstructionType::DECLARE) {
 
         // verify the line is a valid DECLARE instruction
-        int is_valid_declare_line = is_valid_declare_line(prog_line);
+        int valid_declare_line = is_valid_declare_line(prog_line);
         if (valid_declare_line < 0) return valid_declare_line;
 
         // copy the line directly. It needs no expanding
@@ -162,6 +174,10 @@ int Preprocessor::expand_line(const string& prog_line, ofstream& exp_prog) {
         vectors->insert(make_pair(vec_name, vec_type));
         vector_dimensions->insert(make_pair(vec_name, vec_size));
 
+        if (vec_type == VariableType::INPUT || vec_type == VariableType::WEIGHT || vec_type == VariableType::EXP_OUTPUT) {
+            defined_variables->insert(vec_name);
+        }
+
         // the number of expanded lines is precisely the dimension of the vector (one line per component)
         return vector_size;
 
@@ -177,11 +193,11 @@ int Preprocessor::expand_line(const string& prog_line, ofstream& exp_prog) {
 
 int Preprocessor::expand_declare_vector_instruction(const string& line, ofstream &exp_prog) {
 
-    if (line.compare("")) return 0;
+    if (line.compare("") == 0) return 0;
 
     // tokenize the line
     vector<string> *tokens = new vector<string>();
-    int num_tokens = tokenize_line(line, tokens);
+    int num_tokens = tokenize_line(line, tokens, " ");
     if (num_tokens != 4) return INVALID_LINE;
 
     // grab the vector name, type and size
@@ -199,11 +215,11 @@ int Preprocessor::expand_declare_vector_instruction(const string& line, ofstream
 
 int Preprocessor::expand_define_instruction(const string& line, ofstream &exp_prog) {
 
-    if (line.compare("")) return 0;
+    if (line.compare("") == 0) return 0;
 
     // tokenize the line
     vector<string> *tokens = new vector<string>();
-    int num_tokens = tokenize_line(line, tokens);
+    int num_tokens = tokenize_line(line, tokens, " ");
     if (num_tokens < 4 || num_tokens > 6) return INVALID_LINE;
 
     string var_name = tokens->at(1), operation = tokens->at(3);
@@ -212,7 +228,7 @@ int Preprocessor::expand_define_instruction(const string& line, ofstream &exp_pr
         OperationType vec_oper = get_operation_type(operation);
         string operand1 = tokens->at(4);
         string operand2 = tokens->at(5);
-        return expand_vector_instruction(vec_oper, var_name, operand1, operand2, exp_prog);
+        return expand_vector_operation(vec_oper, var_name, operand1, operand2, exp_prog);
 
     }
 
@@ -229,7 +245,7 @@ int Preprocessor::expand_define_instruction(const string& line, ofstream &exp_pr
 
     }
 
-    else if (is_constant(operation) || is_valid_var_name(operation)) {
+    else if (is_constant(operation) || is_valid_var_name(operation) || is_valid_primitive(operation)) {
         exp_prog << line << endl;
         return 1;
     }
@@ -239,7 +255,7 @@ int Preprocessor::expand_define_instruction(const string& line, ofstream &exp_pr
 }
 
 
-int Preprocessor::expand_vector_instruction(const OperationType& oper_type, const string& result, const string& operand1, const string& operand2,
+int Preprocessor::expand_vector_operation(const OperationType& oper_type, const string& result, const string& operand1, const string& operand2,
     ofstream& exp_prog) {
 
     int dimension = vector_dimensions->at(operand1);
@@ -274,7 +290,7 @@ int Preprocessor::expand_unary_macro(const string& macro_name, const string& ope
 
     struct macro *macro = macros->at(macro_name);
     vector<string> *macro_lines = macro->lines;
-    macro->num_references++;
+    
 
     for (int i = 0; i < macro->num_lines; i++) {
         string dummy_line = macro_lines->at(i);
@@ -282,6 +298,7 @@ int Preprocessor::expand_unary_macro(const string& macro_name, const string& ope
         exp_prog << modified_line << endl;
     }
 
+    macro->num_references++;
     return macro->num_lines;
 
 }
@@ -292,14 +309,14 @@ int Preprocessor::expand_binary_macro(const string& macro_name, const string& op
 
     struct macro *macro = macros->at(macro_name);
     vector<string> *macro_lines = macro->lines;
-    macro->num_references++;
-
+    
     for (int i = 0; i < macro->num_lines; i++) {
         string dummy_line = macro_lines->at(i);
         string modified_line = substitute_dummy_names(dummy_line, macro->result, macro->operand1, macro->operand2, result, operand1, operand2, macro->num_references);
         exp_prog << modified_line << endl;
     }
 
+    macro->num_references++;
     return macro->num_lines;
 
 }
@@ -319,19 +336,25 @@ string Preprocessor::substitute_dummy_names(const string& dummy_line, string dum
         string token = tokens->at(i);
 
         if (token.compare(dummy_result) == 0) {
-            modified_line.append(result + " ");
+            modified_line.append(result);
         }
         else if (token.compare(dummy_op1) == 0) {
-            modified_line.append(operand1 + " ");
+            modified_line.append(operand1);
         }
         else if (token.compare(dummy_op2) == 0) {
-            modified_line.append(operand2 + " ");
+            modified_line.append(operand2);
         }
+
+        // if the token is one of the intvars used in the macro
         else if (!is_keyword(token) && !is_constant(token)) {
-            modified_line.append(token + to_string(macro_num_references) + " ");
+            modified_line.append(token + to_string(macro_num_references));
         }
         else {
-            modified_line.append(token + " ");
+            modified_line.append(token);
+        }
+
+        if (i < num_tokens - 1) {
+            modified_line.append(" ");
         }
     }
 
@@ -451,7 +474,7 @@ int Preprocessor::parse_macro_line(const string& macro_line, struct macro *macro
     if (macro_line.compare("") == 0) return 0;
 
     // tokenize the large macro line into its sublines (separated by semi-colons)
-    vector<string> sub_macro_lines = new vector<string>();
+    vector<string> *sub_macro_lines = new vector<string>();
     int num_sub_lines = tokenize_line(macro_line, sub_macro_lines, ";");
     if (num_sub_lines < 2) return INVALID_LINE;
     
@@ -483,8 +506,8 @@ int Preprocessor::parse_macro_first_line(const string& first_line, struct macro 
     if (first_line.compare("") == 0) return 0;
 
     // tokenize
-    vector<string> tokens = new vector<string>();
-    int num_tokens = tokenize_line(macro_line, tokens, " ");
+    vector<string> *tokens = new vector<string>();
+    int num_tokens = tokenize_line(first_line, tokens, " ");
 
     // check for trivial errors
     if (num_tokens < 5 || num_tokens > 6) return INVALID_LINE;
@@ -501,7 +524,7 @@ int Preprocessor::parse_macro_first_line(const string& first_line, struct macro 
     if (!is_valid_macro_name(fourth_token)) return INVALID_MACRO_NAME;
     if (!is_valid_var_name(fifth_token) || second_token.compare(fifth_token) == 0) return INVALID_LINE;
     if (num_tokens == 6) {
-        sixth_token = tokens[5];
+        sixth_token = tokens->at(5);
         if (!is_valid_var_name(sixth_token) || second_token.compare(sixth_token) == 0) return INVALID_LINE;
     }
 
@@ -513,9 +536,14 @@ int Preprocessor::parse_macro_first_line(const string& first_line, struct macro 
     macro->operand2 = sixth_token;
 
     // declare the result and operand variables temporarily
+    // the operand variables cannot be defined in the macro
     variables->insert(make_pair(macro->result, VariableType::INTVAR));
     variables->insert(make_pair(macro->operand1, VariableType::INTVAR));
     if (macro->is_binary) variables->insert(make_pair(macro->operand2, VariableType::INTVAR));
+
+    defined_variables->insert(macro->operand1);
+    if (macro->is_binary) defined_variables->insert(macro->operand2);
+
 
     return 0;
 
@@ -528,13 +556,15 @@ int Preprocessor::parse_macro_subsequent_line(const string& line, struct macro *
     if (line.compare("") == 0) return 0;
 
     // tokenize
-    vector<string> tokens = new vector<string>();
-    int num_tokens = tokenize_line(macro_line, tokens, " ");
-    
+    vector<string> *tokens = new vector<string>();
+    int num_tokens = tokenize_line(line, tokens, " ");
+    if (num_tokens < 3 || num_tokens > 6) return INVALID_LINE;
+
     // temporarily declare or define this variable
     if (is_valid_declare_line(line) == 0) {
         string var_name = tokens->at(2);
         VariableType var_type = get_variable_type(tokens->at(1));
+        if (var_type != VariableType::INTVAR) return BAD_VAR_TYPE;
         variables->insert(make_pair(var_name, var_type));
         return 0;
     }
@@ -554,85 +584,101 @@ int Preprocessor::parse_macro_subsequent_line(const string& line, struct macro *
 /* -------------------------- Error Checking Methods -------------------------- */
 
 
-int Preprocessor::is_valid_declare_line(char *tokens[], int num_tokens) {
+int Preprocessor::is_valid_declare_line(const string& line) {
 
-    if (!tokens) return OTHER_ERROR;
+    if (line.compare("") == 0) return OTHER_ERROR;
+
+    vector<string> *tokens = new vector<string>();
+    int num_tokens = tokenize_line(line, tokens, " ");
     if (num_tokens != 3) return INVALID_LINE;
-    if (tokens[0] == NULL || tokens[1] == NULL || tokens[2] == NULL) return OTHER_ERROR;
 
-    if (strcmp(tokens[0], "declare") != 0) return INVALID_LINE;
-    if (get_variable_type(tokens[1]) == VariableType::INVALID_VAR_TYPE) return BAD_VAR_TYPE;
-    if (!is_valid_var_name(string(tokens[2]))) return INVALID_VAR_NAME;
-    if (variables->count(string(tokens[2])) != 0) return VAR_DECLARED_TWICE;
+    if (tokens->at(0).compare("declare") != 0) return INVALID_LINE;
+    if (get_variable_type(tokens->at(1)) == VariableType::INVALID_VAR_TYPE) return BAD_VAR_TYPE;
+    if (!is_valid_var_name(tokens->at(2))) return INVALID_VAR_NAME;
+    if (variables->count(tokens->at(2)) != 0) return VAR_DECLARED_TWICE;
 
     return 0;
 }
 
 
-int Preprocessor::is_valid_declare_vector_line(char *tokens[], int num_tokens) {
+int Preprocessor::is_valid_declare_vector_line(const string& line) {
 
-    if (!tokens) return OTHER_ERROR;
+    if (line.compare("") == 0) return OTHER_ERROR;
+
+    vector<string> *tokens = new vector<string>();
+    int num_tokens = tokenize_line(line, tokens, " ");
     if (num_tokens != 4) return INVALID_LINE;
-    if (tokens[0] == NULL || tokens[1] == NULL || tokens[2] == NULL || tokens[3] == NULL) return OTHER_ERROR;    
 
-    if (strcmp(tokens[0], "declare_vector") != 0) return INVALID_LINE;
-    if (get_variable_type(tokens[1]) == VariableType::INVALID_VAR_TYPE) return BAD_VAR_TYPE;
-    if (!is_valid_var_name(string(tokens[2]))) return INVALID_VAR_NAME;
-    if (vectors->count(string(tokens[2])) != 0 || variables->count(string(tokens[2])) != 0) return VAR_DECLARED_TWICE;
-    if (!is_int(string(tokens[3])) || !is_valid_vector_size(stoi(string(tokens[3])))) return BAD_VECTOR_SIZE;
+    if (tokens->at(0).compare("declare_vector") != 0) return INVALID_LINE;
+    if (get_variable_type(tokens->at(1)) == VariableType::INVALID_VAR_TYPE) return BAD_VAR_TYPE;
+    if (!is_valid_var_name(tokens->at(2))) return INVALID_VAR_NAME;
+    if (vectors->count(tokens->at(2)) != 0 || variables->count(tokens->at(2)) != 0) return VAR_DECLARED_TWICE;
+    if (!is_int(tokens->at(3)) || !is_valid_vector_size(stoi(tokens->at(3)))) return BAD_VECTOR_SIZE;
 
     return 0;
 
 }
 
 
-int Preprocessor::is_valid_define_line(char *tokens[], int num_tokens) {
+int Preprocessor::is_valid_define_line(const string& line) {
 
-    if (!tokens) return OTHER_ERROR;
+    if (line.compare("") == 0) return OTHER_ERROR;
+
+    vector<string> *tokens = new vector<string>();
+    int num_tokens = tokenize_line(line, tokens, " ");
     if (num_tokens < 4 || num_tokens > 6) return INVALID_LINE;
-    if (tokens[0] == NULL || tokens[1] == NULL || tokens[2] == NULL || tokens[3] == NULL) return OTHER_ERROR;
 
-    string first_token(tokens[0]);
-    string second_token(tokens[1]);
-    string third_token(tokens[2]);
+    string first_token = tokens->at(0);
+    string second_token = tokens->at(1);
+    string third_token = tokens->at(2);
 
     // every define instruction resembles "define <var_name> = ..."
     if (first_token.compare("define") != 0 || !is_valid_var_name(second_token) || third_token.compare("=") != 0)
         return INVALID_LINE;
 
     // input, weight and expected output variables cannot be defined
-    VariableType var_type = get_variable_type(second_token);
+    VariableType var_type;
+    if (variables->count(second_token) != 0) {
+        var_type = variables->at(second_token);
+    } else if (vectors->count(second_token) != 0) {
+        var_type = vectors->at(second_token);
+    } else {
+        return VAR_DEFINED_BEFORE_DECLARED;
+    }
     if (var_type == VariableType::INPUT || var_type == VariableType::WEIGHT || var_type == VariableType::EXP_OUTPUT)
         return CANNOT_DEFINE_I_W_EO;
 
-    string fourth_token(tokens[3]);
+    string fourth_token = tokens->at(3);
 
 
     // a variable could be defined as a constant
     if (is_constant(fourth_token)) {
         // the variable being defined must have been declared, but cannot have been defined
-        if ((variables->count(second_token) == 0 || defined_variables->count(second_token) != 0)) return VAR_DECLARED_TWICE;
+        if (variables->count(second_token) == 0) return VAR_DEFINED_BEFORE_DECLARED;
+        if (defined_variables->count(second_token) != 0) return VAR_DEFINED_TWICE;
         return (num_tokens == 4 ? 0 : INVALID_LINE);
     }
 
     // a variable could be defined as an operation of 1 or 2 constants/variables
     // this operation might be a primitive or might be a user defined macro
     if (is_valid_primitive(fourth_token) || is_valid_macro(fourth_token)) {
+
         // the variable being defined must have been declared, but cannot have been defined
-        if ((variables->count(second_token) == 0 || defined_variables->count(second_token) != 0)) return VAR_DECLARED_TWICE;
+        if (variables->count(second_token) == 0) return VAR_DEFINED_BEFORE_DECLARED;
+        if (defined_variables->count(second_token) != 0) return VAR_DEFINED_TWICE;
         
         if (is_binary_primitive(fourth_token) || is_binary_macro(fourth_token)) {
             if (num_tokens != 6) return INVALID_LINE;
 
-            string fifth_token(tokens[4]), sixth_token(tokens[5]);
+            string fifth_token = tokens->at(4), sixth_token = tokens->at(5);
             bool first_operand_constant = is_constant(fifth_token);
             bool second_operand_constant = is_constant(sixth_token);
 
             if (!first_operand_constant)
-                if (variables->count(fifth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
+                if (defined_variables->count(fifth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
 
             if (!second_operand_constant)
-                if (variables->count(sixth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
+                if (defined_variables->count(sixth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
 
             return 0;
 
@@ -642,11 +688,11 @@ int Preprocessor::is_valid_define_line(char *tokens[], int num_tokens) {
             
             if (num_tokens != 5) return INVALID_LINE;
 
-            string fifth_token(tokens[4]);
+            string fifth_token = tokens->at(4);
             bool first_operand_constant = is_constant(fifth_token);
 
             if (!first_operand_constant)
-                if (variables->count(fifth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
+                if (defined_variables->count(fifth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
 
             return 0;
 
@@ -658,12 +704,14 @@ int Preprocessor::is_valid_define_line(char *tokens[], int num_tokens) {
     // a variable could be defined as an operation of 2 vectors, a vector and a variable, or a vector and a constant
     if (is_valid_vector_operation(fourth_token)) {
         // the variable being defined must have been declared, but cannot have been defined
+        // if the operation is a dot product, the result variable must be a scalar, not a vector
         if (get_operation_type(fourth_token) == OperationType::DOT) {
-            if (variables->count(second_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
-            if (defined_variables->count(second_token) != 0) return VAR_DECLARED_TWICE;
+            if (variables->count(second_token) == 0) return VAR_DEFINED_BEFORE_DECLARED;
+            if (defined_variables->count(second_token) != 0) return VAR_DEFINED_TWICE;
+            if (vectors->count(second_token) != 0) return INVALID_LINE;
         } else {
-            if (vectors->count(second_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
-            if (defined_variables->count(second_token) != 0) return VAR_DECLARED_TWICE;
+            if (vectors->count(second_token) == 0) return VAR_DEFINED_BEFORE_DECLARED;
+            if (defined_variables->count(second_token) != 0) return VAR_DEFINED_TWICE;
         }
 
         // both the operands must have been declared and defined, and must be of the same dimension
@@ -672,10 +720,10 @@ int Preprocessor::is_valid_define_line(char *tokens[], int num_tokens) {
             
             if (num_tokens != 6) return INVALID_LINE;
             
-            string fifth_token(tokens[4]), sixth_token(tokens[5]);
+            string fifth_token = tokens->at(4), sixth_token = tokens->at(5);
 
-            if (vectors->count(fifth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
-            if (vectors->count(sixth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
+            if (vectors->count(fifth_token) == 0 || defined_variables->count(fifth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
+            if (vectors->count(sixth_token) == 0 || defined_variables->count(fifth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
         
             if (vector_dimensions->at(fifth_token) != vector_dimensions->at(sixth_token)) return VECTORS_OF_DIFFERENT_DIMENSION;
             if (get_operation_type(fourth_token) != OperationType::DOT && vector_dimensions->at(fifth_token) != vector_dimensions->at(second_token))
@@ -689,12 +737,12 @@ int Preprocessor::is_valid_define_line(char *tokens[], int num_tokens) {
 
             if (num_tokens != 6) return INVALID_LINE;
 
-            string fifth_token(tokens[4]), sixth_token(tokens[5]);
+            string fifth_token = tokens->at(4), sixth_token = tokens->at(5);
 
-            if (vectors->count(fifth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
+            if (vectors->count(fifth_token) == 0 || defined_variables->count(fifth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
             if (vector_dimensions->at(fifth_token) != vector_dimensions->at(second_token)) return VECTORS_OF_DIFFERENT_DIMENSION;
             if (!is_constant(sixth_token)) {
-                if (variables->count(sixth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
+                if (defined_variables->count(sixth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
             }
             return 0;
             
@@ -706,11 +754,13 @@ int Preprocessor::is_valid_define_line(char *tokens[], int num_tokens) {
     // a variable could be defined as equivalent to another variable
     // this other variable must have been declared already
     if (is_valid_var_name(fourth_token)) {
+
         // the variable being defined must have been declared, but cannot have been defined
-        if ((variables->count(second_token) == 0 || defined_variables->count(second_token) != 0)) return VAR_DECLARED_TWICE;
+        if (variables->count(second_token) == 0) return VAR_DEFINED_BEFORE_DECLARED;
+        if (defined_variables->count(second_token) != 0) return VAR_DEFINED_TWICE;
 
         if (num_tokens != 4) return INVALID_LINE;
-        if (variables->count(fourth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
+        if (defined_variables->count(fourth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
         return 0;
     }
 
@@ -731,9 +781,9 @@ bool Preprocessor::is_valid_macro(const string& name) {
 
 
 void test_expand(char line[], Preprocessor *p) {
-    vector<string> *expanded_prog_lines = new vector<string> ();
+    /*vector<string> *expanded_prog_lines = new vector<string> ();
     int num_lines = p->expand_line(expanded_prog_lines, line);
-    for (int i = 0; i < num_lines; i++) cout << expanded_prog_lines->at(i) << endl;
+    for (int i = 0; i < num_lines; i++) cout << expanded_prog_lines->at(i) << endl;*/
 }
 
 
@@ -828,11 +878,11 @@ void test_macro_parsing() {
 }
 
 
-int main(int argc, char *argv[]) {
+/*int main(int argc, char *argv[]) {
     //test_macro_parsing();
     test_expand_macro();
     return 0;
-}
+}*/
 
 
 

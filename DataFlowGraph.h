@@ -2,8 +2,8 @@
 #define DATAFLOWGRAPH_H
 
 #include <unordered_map>
+#include <list>
 
-#include "Compiler.h"
 #include "Node.h"
 #include "utilities.h"
 
@@ -30,10 +30,16 @@ class DataFlowGraph {
 
 public:
 
-	/* Returns whether the given name can be parsed as a constant (a float).
- 	 * The try-catch block is because the stof method throws an exception if the given string cannot be parsed as a float.
+	/* Constructor.
+	 * Initializes the map of nodes, and set num_nodes to 0.
  	 */
 	DataFlowGraph();
+
+	/* Destructor.
+	 * Frees each of the nodes in this graph.
+	 * Frees the map of nodes itself.
+	 */
+	~DataFlowGraph();
 
 
 
@@ -43,7 +49,8 @@ public:
  	 * Returns 0 if the node was successfully added.
  	 * Returns -1 if there is already a node by this name in the graph.
  	 * Returns -1 if a loss node is being added for the second time.
- 	 * In both failure cases, this method will not add the given node if there is an existing node by the same name.
+ 	 * Returns -1 if a the given node is constant.
+ 	 * In all failure cases, the new node is not added.
  	 */
 	int add_node(Node *node);
 
@@ -64,22 +71,26 @@ public:
 	bool add_flow_edge(const string& child_name, const string& parent_name);
 	
 
-
-	/* Returns the map of nodes for this Data Flow Graph.
- 	 */
-	const unordered_map<string, Node*>* get_all_nodes() const;
-
 	/* Returns the number of nodes in this Data Flow Graph.
  	 * Constant nodes are not included in this, so this number represents the number of variables in the computation.
  	 */
 	int get_num_nodes() const;
 
-
-
+	/* Returns the name of the loss node.
+	 * This is an empty string if this DFG has not yet seen a loss node.
+	 */
 	string get_loss_var_name() const;
+
+	/* Returns a pointer to the loss node.
+	 * Returns a NULL pointer if this DFG has not yet seen a loss node.
+	 */
 	Node *get_loss_node() const;
 
 	
+
+	/* --------------------- Topological Sort Methods ------------------------- */
+
+
 
 	/* Sets all nodes in the Data Flow Graph to unmarked.
  	 * Used in preparation for topological sort.
@@ -91,17 +102,17 @@ public:
 	 * This is a valid ordering to visit the nodes when computing partial derivatives.
 	 * This is the Topological Sorting Algorithm used:
 	 * 
-	 * 	sort(nodes):
+	 * 	top_sort(nodes):
 	 *		clear_all_markings();
 	 *		for all nodes:
 	 *			if marked(node), continue.
-	 *			if unmarked, visit(node).
+	 *			if unmarked, top_sort_visit(node).
 	 *
-	 *	visit(node):
+	 *	top_sort_visit(node):
 	 *		mark temporarily
-	 *		visit(child_one); visit(child_two);
+	 *		top_sort_visit(child_one); top_sort_visit(child_two);
 	 *		mark permanently
-	 *		add to head of list
+	 *		add node to head of list
 	 */
 	void top_sort(list<Node *> *sorted_nodes);
 	void top_sort_visit(Node *node, list<Node *> *sorted_nodes);

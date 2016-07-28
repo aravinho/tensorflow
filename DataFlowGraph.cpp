@@ -1,21 +1,29 @@
-#include <iostream>
-#include <fstream>
 #include <string>
-#include<list>
 
-#include "Compiler.h"
 #include "DataFlowGraph.h"
-#include "Node.h"
 
 
 using namespace std;
 
-/* --------------- Constructor ---------------- */
+
+/* --------------- Constructor/Destructor ---------------- */
 
 DataFlowGraph::DataFlowGraph() {
 	nodes = new unordered_map<string, Node *>();
 	num_nodes = 0;
 	loss_node_added = false;
+	loss_node = NULL;
+	loss_var_name = "";
+}
+
+
+DataFlowGraph::~DataFlowGraph() {
+	for (unordered_map<string, Node*>::iterator it = nodes->begin();
+		it != nodes->end(); ++it) {
+		delete it->second;
+	}
+
+	delete nodes;
 }
 
 
@@ -25,6 +33,8 @@ int DataFlowGraph::add_node(Node *node) {
 	if (node == NULL) {
 		return -1;
 	}
+
+	if (node->is_constant()) return -1;
 
 	// If we are adding the loss node, make sure to set the loss node's parent to be itself.
 	if (node->get_type() == VariableType::LOSS) {
@@ -78,12 +88,6 @@ bool DataFlowGraph::add_flow_edge(const string& child_name, const string& parent
 	return success;	
 }
 
-
-/* ---------------- All Nodes ------------------- */
-
-const unordered_map<string, Node*>* DataFlowGraph::get_all_nodes() const {
-	return nodes;
-}
 
 int DataFlowGraph::get_num_nodes() const {
 	return num_nodes;

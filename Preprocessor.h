@@ -6,6 +6,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "utilities.h"
+
 using namespace std;
 
 
@@ -70,6 +72,12 @@ public:
      */
     Preprocessor();
 
+    /* Destructor.
+     * Frees all the member maps and sets.
+     * Frees all the macro structs within the macros map.
+     */
+    ~Preprocessor();
+
 
     /* ------------------------------------- Main Methods -------------------------------------- */
 
@@ -114,7 +122,7 @@ public:
      * This is 1 if no expansion was needed, and the appropriate error code (see utilities.h) if the given line was invalid.
      * Returns 0 if prog_line is an empty line.
      */
-    int Preprocessor::expand_line(const string& prog_line, ofstream& exp_prog); 
+    int expand_line(const string& prog_line, ofstream& exp_prog); 
 
 
 
@@ -125,10 +133,10 @@ public:
      /* Expands a DECLARE_VECTOR instruction, copying the expanded lines into EXP_PROG.
      * The declare_vector instruction gets broken down into as many regular declare instructions as there are elements in the vector.
      *
-     * ex. "declare_vector input x[3]" becomes:
+     * ex. "declare_vector input x 3" becomes:
+     * "declare input x.0"
      * "declare input x.1"
      * "declare input x.2"
-     * "declare input x.3"
      *
      * This method returns the dimension of the vector, which will always be a positive integer.
      */
@@ -153,7 +161,7 @@ public:
 	 * The expanded lines are written into EXP_PROG.
 	 * Returns the number of expanded lines.
 	 */
-	int expand_vector_instruction(const OperationType& oper_type, const string& result, const string& operand1, const string& operand2,
+	int expand_vector_operation(const OperationType& oper_type, const string& result, const string& operand1, const string& operand2,
     	ofstream& exp_prog);
 
 
@@ -321,7 +329,7 @@ public:
     /* ------------------------------ Error Checking Methods ---------------------------- */
 
 
-    /* Determines whether the given tokens form a valid DECLARE instruction.
+    /* Determines whether the given LINE is a valid DECLARE instruction.
      * In order to be valid, there must be exactly 3 tokens.
      * The first must be the word "declare", the second a valid variable type, and the third a valid variable name.
      * See the invalid_var_name function in utilities.h for what constitutes a valid variable name.
@@ -329,9 +337,9 @@ public:
      *
      * Returns 0 if the instruction is valid, or an error code otherwise (see utilities.h).
      */
-    int is_valid_declare_line(char *tokens[], int num_tokens);
+    int is_valid_declare_line(const string& line);
 
-    /* Determines whether the given tokens form a valid DEFINE instruction.
+    /* Determines whether the given LINE is a valid DEFINE instruction.
      * In order to be valid, there must be exactly 4 tokens.
      * The first must be the word "declare_vector" and the second a valid variable type.
      * The third must be a valid variable name and the fourth an int (the dimension of the vector).
@@ -341,9 +349,9 @@ public:
      *
      * Returns 0 if the instruction is valid, or an error code otherwise (see utilities.h).
      */
-    int is_valid_declare_vector_line(char *tokens[], int num_tokens);
+    int is_valid_declare_vector_line(const string& line);
 
-    /* Determines whether the given tokens form a valid DEFINE instruction.
+    /* Determines whether the given LINE is a valid DEFINE instruction.
      * A variable must be declared before it is defined, and cannot be defined twice.
      * If a variable is defined as an operation of one or more other variables, all these other variables must be defined.
      * Input, weight and expected output variables cannot be defined.
@@ -366,28 +374,13 @@ public:
      *
      * This method returns 0 if the instruction is valid, or an error code otherwise (see utilities.h)
      */
-    int is_valid_define_line(char *tokens[], int num_tokens);
+    int is_valid_define_line(const string& line);
 
     /* Returns whether a macro with the given NAME has been successfully defined earlier. */
 	bool is_valid_macro(const string& name);
 
 	
 };
-
-
-/* -------------------------------- Tokenizing Method ----------------------------- */
-
-
-/* Populates the tokens array with the tokens of LINE.
- * Tokens are delimited by any character in the given DELIM string.
- *
- * This function uses the strtok method to tokenize.
- * As a result, the given char-pointer is mangled during the execution of this function.
- *
- * This function is general enough to be used in other parts of the system, such as the Compiler or Interpreter.
- * Returns the number of tokens, or an error code on failure (see utilities.h).
- */
-int tokenize_line(char line[], char *tokens[MAX_NUM_TOKENS], const string& delim);
 
 
 

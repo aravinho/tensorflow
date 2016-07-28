@@ -1,7 +1,6 @@
 #ifndef BINDINGS_DICTIONARY_H
 #define BINDINGS_DICTIONARY_H
 
-#include <cfloat>
 #include <string>
 #include <unordered_map>
 
@@ -19,10 +18,22 @@ public:
 	unordered_map<string, float> *bindings;
 
 
+	/* ---------------------- Constructor/Destructor ------------------ */
+
+
 	/* Constructor.
 	 * Initializes bindings to be an empty dictionary.
 	 */
 	BindingsDictionary();
+
+	/* Destructor.
+	 * Deletes bindings map.
+	 */
+	~BindingsDictionary();
+
+
+	/* ------------------------ Public Methods ------------------------- */
+
 
 	/* Creates a dummy {name, FLT_MAX} binding.
 	 * If the given name is already in the dictionary, returns -1 and does not create the binding.
@@ -32,6 +43,8 @@ public:
 
 	/* Binds the given value to the given name.
 	 * If the given name is not found, returns -1.
+	 * If the given variable name has already been defined, returns -1 and does nothing.
+	 *	(Variables cannot be redefined.)
 	 * If the given value is FLT_MIN or FLT_MAX, returns -1 and does nothing.
 	 * FLT_MIN and FLT_MAX are not valid values.
 	 * Returns 0 on success.

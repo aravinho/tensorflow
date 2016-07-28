@@ -423,7 +423,7 @@ void test_calculate_weights() {
 	print_variable_vector(weights);
 }
 
-int main(int argc, char *argv[]) {
+/*int main(int argc, char *argv[]) {
 
 	//test_find_partials();
 	//test_vector_of_zeros();
@@ -436,4 +436,4 @@ int main(int argc, char *argv[]) {
 	test_calculate_weights();
 
 	return 0;
-}
+}*/

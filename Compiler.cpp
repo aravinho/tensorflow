@@ -32,7 +32,7 @@ Compiler::Compiler() {
 
 int Compiler::compile(const string& shape_prog_filename, const string& gcp_filename) {
 
-    if (invalid_file_name(shape_prog_filename)) {
+    if (!is_valid_file_name(shape_prog_filename)) {
         cerr << "Invalid Shape Program file name: " << shape_prog_filename << endl;
         return OTHER_ERROR;
     }
@@ -43,9 +43,6 @@ int Compiler::compile(const string& shape_prog_filename, const string& gcp_filen
 
     // buffer into which we read a line from the file
     string shape_line;
-
-    // line to hold the GCP-near-duplicate line
-    string gcp_duplicate_line;
 
     // indicates whether the GCP-near-duplicate was created successfully
     int duplicate_success = 0;
@@ -59,27 +56,9 @@ int Compiler::compile(const string& shape_prog_filename, const string& gcp_filen
     {
         getline(shape_prog, shape_line);
         cout << "shape line: " << shape_line << endl;
-        //shape_prog.getline(shape_line, MAX_LINE_LENGTH);
-        //strcpy(shape_line_copy, shape_line);
 
-        duplicate_success = duplicate_line_for_gcp(shape_line, &gcp_duplicate_line);
-        //duplicate_success = duplicate_line_for_gcp(shape_line_copy, gcp_line);
-
-        if (duplicate_success == DUPLICATE_SUCCESS_DECLARE) {
-            gcp << gcp_duplicate_line << endl;
-            //gcp.write(gcp_line, strlen(gcp_line));
-        }
-        else if(duplicate_success == DUPLICATE_SUCCESS_DEFINE) {
-            gcp << gcp_duplicate_line << endl;
-            //gcp.write(shape_line, strlen(shape_line));
-        }
-        else if (duplicate_success == DUPLICATE_SUCCESS_EMPTY_LINE) {
-            gcp << "\n";
-        }
-        else {
-            cerr << "Invalid line: " << shape_line << endl;
-            return duplicate_success;
-        }
+        duplicate_success = duplicate_line_for_gcp(shape_line, gcp);
+        if (duplicate_success != 0) return duplicate_success;
         
         parse_success = parse_line(shape_line);
         if (parse_success != 0) {
@@ -96,12 +75,9 @@ int Compiler::compile(const string& shape_prog_filename, const string& gcp_filen
     list<Node *> *top_sorted_nodes = new list<Node *>();
     dfg->top_sort(top_sorted_nodes);
 
-
-
     // Grab the Loss node
     Node *loss_node = dfg->get_loss_node();
     string loss_var_name = dfg->get_loss_var_name();
-    cout << "loss var name: " << loss_var_name << endl;
 
     // Iterate through the sorted nodes
     // Define partial/loss/partial/current = partial/loss/partial/parent * partial/parent/partial/current
@@ -442,10 +418,10 @@ void define_child_two_partial(Node *node, ofstream& gcp, string child_two_partia
 }
 
 
-int Compiler::duplicate_line_for_gcp(const string& shape_line, string *gcp_duplicate_line) {
+int Compiler::duplicate_line_for_gcp(const string& shape_line, ofstream& gcp) {
     
-    if (gcp_duplicate_line == NULL) return OTHER_ERROR;
-    if (shape_line.compare("") == 0) return DUPLICATE_SUCCESS_EMPTY_LINE;
+    if (shape_line.compare("") == 0) return 0;
+    if (!gcp.is_open()) return OTHER_ERROR;
 
     // tokenize the shape line
     vector<string> *tokens = new vector<string> ();
@@ -459,8 +435,8 @@ int Compiler::duplicate_line_for_gcp(const string& shape_line, string *gcp_dupli
 
     // If define, make sure we're not defining an input, weight or exp_output
     if (inst_type == InstructionType::DEFINE) {
-        *gcp_duplicate_line = shape_line;
-        return DUPLICATE_SUCCESS_DEFINE;
+        gcp << shape_line << endl;
+        return 0;
     }
 
     // If declare, change type appropriately
@@ -478,11 +454,8 @@ int Compiler::duplicate_line_for_gcp(const string& shape_line, string *gcp_dupli
         }
 
         string var_name = tokens->at(2);
-        
-        *gcp_duplicate_line = "declare ";
-        gcp_duplicate_line->append(gcp_var_type + " ");
-        gcp_duplicate_line->append(var_name);
-        return DUPLICATE_SUCCESS_DECLARE;
+        gcp << "declare " << gcp_var_type << " " << var_name << endl;
+        return 0;
     }
 
     return INVALID_LINE;
@@ -492,7 +465,7 @@ int Compiler::duplicate_line_for_gcp(const string& shape_line, string *gcp_dupli
 
 
 
-int main(int argc, char *argv[]) {
+/*int main(int argc, char *argv[]) {
 
     Node *a = new Node("a", false); 
     Node *b = new Node("-7", true);
@@ -510,3 +483,4 @@ int main(int argc, char *argv[]) {
 
     
 }
+*/

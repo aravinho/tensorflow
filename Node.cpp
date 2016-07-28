@@ -1,34 +1,48 @@
 #include <string>
-#include <fstream>
-#include "Node.h"
-#include "utilities.h"
+#include <cfloat>
 
+#include "Node.h"
 
 using namespace std;
 
 
-/* ----------- Constructors ------------- */
+/* ----------- Constructors/Destructors ------------- */
 
 Node::Node() {
-	num_children = 0;
+	name = "";
+	constant_value = FLT_MIN;
+	type = VariableType::INVALID_VAR_TYPE;
+	operation = OperationType::INVALID_OPERATION;
+
+    parent_name = "";
+    parent = NULL;
+
+    child_one_name = "";
+    child_two_name = "";
+    child_one = NULL;
+    child_two = NULL;
+
+    num_children = 0;
 	mark = 0;
 }
 
 
-Node::Node(string node_name, bool is_constant) {
+Node::Node(string node_name, bool is_constant) : Node() {
 	name = node_name;
-
 	if (is_constant) {
 		constant_value = stof(node_name);
 		set_type(VariableType::CONSTANT);
-	}
-
-	num_children = 0;
-	mark = 0;
+	}	
 }
 
 
-/* ----------- Basic Info ---------------- */
+Node::~Node() {
+	if (child_one && child_one->is_constant()) delete child_one;
+	if (child_two && child_two->is_constant()) delete child_two;
+}
+
+
+/* ----------- Basic Getters/Setters ---------------- */
 
 string Node::get_name() const {
 	return name;
@@ -41,6 +55,7 @@ VariableType Node::get_type() const {
 	return type;
 }
 void Node::set_type(VariableType new_type) {
+	if (this->is_constant()) return;
 	type = new_type;
 }
 
@@ -52,11 +67,12 @@ OperationType Node::get_operation() const {
 	return operation;
 }
 void Node::set_operation(OperationType new_operation) {
+	if (this->is_constant()) return;
 	operation = new_operation;
 }
 
 
-/* ----------- Parent Info --------------- */
+/* ----------- Parent Methods --------------- */
 
 string Node::get_parent_name() const {
 	return parent_name;
@@ -65,16 +81,20 @@ Node *Node::get_parent() const {
 	return parent;
 }
 bool Node::set_parent(Node *new_parent) {
-	if (new_parent == NULL) {
-		return false;
-	}
+	if (new_parent == NULL || new_parent->is_constant()) return false;
+	if (new_parent->get_type() == VariableType::INPUT
+		|| new_parent->get_type() == VariableType::WEIGHT 
+		|| new_parent->get_type() == VariableType::EXP_OUTPUT) return false;
+	if (this->get_type() == VariableType::LOSS
+		&& new_parent != this) return false;
+
 	parent = new_parent;
 	parent_name = new_parent->get_name();
 	return true;
 }
 
 
-/* ------------ Child Info ---------------- */
+/* ------------ Child Methods ---------------- */
 
 string Node::get_child_one_name() const {
 	return child_one_name;
@@ -90,9 +110,11 @@ Node *Node::get_child_two() const {
 }
 
 bool Node::set_child(Node *new_child) {
-	if (new_child == NULL || num_children == 2) {
-		return false;
-	}
+	if (new_child == NULL || num_children == 2 || this->is_constant()) return false;
+	if (this->get_type() == VariableType::INPUT
+		|| this->get_type() == VariableType::WEIGHT 
+		|| this->get_type() == VariableType::EXP_OUTPUT) return false; 
+	if (new_child->get_type() == VariableType::LOSS) return false;
 	
 	if (num_children == 0) {
 		child_one = new_child;
@@ -113,7 +135,7 @@ int Node::get_num_children() const {
 }
 
 
-/* ---------------- Topological Sort Mark Info -------------- */
+/* ---------------- Topological Sort Mark Methods -------------- */
 
 int Node::get_mark() const {
 	return mark;

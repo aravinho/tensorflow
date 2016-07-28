@@ -1,3 +1,6 @@
+test_objects = TestUtilities.o TestNode.o TestDataFlowGraph.o TestBindingsDictionary.o TestPreprocessor.o
+class_objects = DataFlowGraph.o Node.o Compiler.o Preprocessor.o utilities.o Interpreter.o BindingsDictionary.o GradientDescent.o
+
 tensorflow: utilities.o Node.o DataFlowGraph.o Compiler.o RunCompiler.o 
 	g++ Compiler.o Node.o DataFlowGraph.o RunCompiler.o utilities.o -o tensorflow
 
@@ -9,6 +12,9 @@ weighteval: utilities.o BindingsDictionary.o Interpreter.o GradientDescent.o
 
 preprocessor: Preprocessor.o utilities.o
 	g++ Preprocessor.o utilities.o -o preprocessor
+
+test: $(test_objects) $(class_objects) RunTests.o
+	g++ $(test_objects) $(class_objects) RunTests.o -o test
 
 Preprocessor.o: Preprocessor.cpp Preprocessor.h utilities.h
 	g++ -c -std=c++11 Preprocessor.cpp
@@ -40,4 +46,22 @@ BindingsDictionary.o: BindingsDictionary.cpp BindingsDictionary.h utilities.h
 
 GradientDescent.o: GradientDescent.h GradientDescent.cpp
 	g++ -c -std=c++11 GradientDescent.cpp
+
+TestUtilities.o: tests/TestUtilities.cpp tests/TestUtilities.h
+	g++ -c -std=c++11 tests/TestUtilities.cpp
+
+TestNode.o: Node.o tests/TestNode.cpp tests/TestNode.h Node.h
+	g++ -c -std=c++11 tests/TestNode.cpp
+
+TestDataFlowGraph.o: DataFlowGraph.o tests/TestDataFlowGraph.cpp tests/TestDataFlowGraph.h
+	g++ -c -std=c++11 tests/TestDataFlowGraph.cpp
+
+TestBindingsDictionary.o: BindingsDictionary.o tests/TestBindingsDictionary.cpp tests/TestBindingsDictionary.h
+	g++ -c -std=c++11 tests/TestBindingsDictionary.cpp
+
+TestPreprocessor.o: Preprocessor.o tests/TestPreprocessor.cpp tests/TestPreprocessor.h
+	g++ -c -std=c++11 tests/TestPreprocessor.cpp
+
+RunTests.o: tests/RunTests.cpp
+	g++ -c -std=c++11 tests/RunTests.cpp
 
