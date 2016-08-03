@@ -1,3 +1,6 @@
-Aravind Sivakumar
-Computer Science at UC Berkeley
-Summer 2016 Project
+## Summer 2016 Project: Implementing TensorFlow
+#### Aravind Sivakumar
+##### Computer Science student at UC Berkeley
+
+# DESIGN DOC COMING SOON
+
