@@ -1,4 +1,4 @@
-test_objects = TestUtilities.o TestNode.o TestDataFlowGraph.o TestBindingsDictionary.o TestPreprocessor.o
+test_objects = TestUtilities.o TestNode.o TestDataFlowGraph.o TestBindingsDictionary.o TestPreprocessor.o TestCompiler.o TestInterpreter.o TestGradientDescent.o
 class_objects = DataFlowGraph.o Node.o Compiler.o Preprocessor.o utilities.o Interpreter.o BindingsDictionary.o GradientDescent.o
 
 tensorflow: utilities.o Node.o DataFlowGraph.o Compiler.o RunCompiler.o 
@@ -61,6 +61,15 @@ TestBindingsDictionary.o: BindingsDictionary.o tests/TestBindingsDictionary.cpp 
 
 TestPreprocessor.o: Preprocessor.o tests/TestPreprocessor.cpp tests/TestPreprocessor.h
 	g++ -c -std=c++11 tests/TestPreprocessor.cpp
+
+TestCompiler.o: Compiler.o tests/TestCompiler.cpp tests/TestCompiler.h
+	g++ -c -std=c++11 tests/TestCompiler.cpp
+
+TestInterpreter.o: Interpreter.o tests/TestInterpreter.cpp tests/TestInterpreter.h
+	g++ -c -std=c++11 tests/TestInterpreter.cpp
+
+TestGradientDescent.o: GradientDescent.o tests/TestGradientDescent.cpp tests/TestGradientDescent.h
+	g++ -c -std=c++11 tests/TestGradientDescent.cpp
 
 RunTests.o: tests/RunTests.cpp
 	g++ -c -std=c++11 tests/RunTests.cpp

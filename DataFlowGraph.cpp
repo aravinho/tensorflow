@@ -45,7 +45,7 @@ int DataFlowGraph::add_node(Node *node) {
 		loss_node = node;
 		loss_var_name = node->get_name();
 		loss_node_added = true;
-		node->set_parent(node);
+		node->add_parent(node);
 	}
 
 	if (nodes->count(node->get_name()) > 0) {
@@ -83,7 +83,7 @@ bool DataFlowGraph::add_flow_edge(const string& child_name, const string& parent
 		return false;
 	}
 
-	bool success = child->set_parent(parent);
+	bool success = child->add_parent(parent);
 	success = success && parent->set_child(child);
 	return success;	
 }
@@ -117,12 +117,7 @@ void DataFlowGraph::clear_all_markings() {
 
 void DataFlowGraph::top_sort(list<Node *> *sorted_nodes) {
 	clear_all_markings();
-
-	for (unordered_map<string, Node *>::iterator it = nodes->begin(); it != nodes->end(); ++it) {
-		if (it->second->is_unmarked()) {
-			top_sort_visit(it->second, sorted_nodes);
-		}
-	}
+	top_sort_visit(loss_node, sorted_nodes);
 }
 
 void DataFlowGraph::top_sort_visit(Node *node, list<Node *> *sorted_nodes) {

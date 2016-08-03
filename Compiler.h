@@ -2,6 +2,7 @@
 #define COMPILER_H
 
 #include <vector>
+#include <unordered_set>
 
 #include "Node.h"
 #include "DataFlowGraph.h"
@@ -33,11 +34,14 @@ class Compiler {
      */
     DataFlowGraph *dfg;
 
-    /* This map holds the dimensions of all the vector variables declared in the Shape Program.
-     * It maps the names of the vectors to their dimensions.
-     * When a define_dot line is parsed, this map is used to ensure the two operand vectors are of the same dimension.
+    /* This set holds the nodes visited topologically.
+     * Nodes are visited after every line is parsed and the DFG is built.
      */
-    unordered_map<string, int> *vector_dimensions;
+    unordered_set<Node *> *visited_nodes;
+
+    /* This set holds the names of the nodes visited topologically.
+     */
+    unordered_set<string> *visited_node_names;
 
 public:
 
@@ -46,6 +50,11 @@ public:
      * Initializes vector_dimensions as an empty unordered map.
      */
     Compiler();
+
+    /* Destructor.
+     * Deletes the pointer to the DFG, which calls the DFG's destructor.
+     */
+    ~Compiler();
 
     /* This method builds the GCP, through the following steps:
      * 
@@ -78,48 +87,61 @@ public:
      */
     int duplicate_line_for_gcp(const string& shape_line, ofstream& gcp);
 
-    /* Determines whether the given tokens form a valid DECLARE instruction.
-     * In order to be valid, there must be exactly 3 tokens.
-     * The first must be the word "declare", the second a valid variable type, and the third a valid variable name.
-     * See the invalid_var_name function in utilities.h for what constitutes a valid variable name.
-     * Note that we do not check whether a variable name has previously been defined in the program????
-     * This error will be caught during the second phase of compilation/interpretation???
-     *
-     * Returns 0 if the instruction is valid, or an error code otherwise (see utilities.h).
+    /* Returns a pointer to the DFG.
+     * This is used mainly for testing purposes, so the DFG can be examined.
      */
-    int is_valid_declare_line(char *tokens[], int num_tokens);
+    DataFlowGraph *get_dfg();
 
-    /* Determines whether the given tokens form a valid DEFINE instruction.
-     * In order to be valid, there must be exactly 4 tokens.
-     * The first must be the word "declare_vector" and the second a valid variable type.
-     * The third must be a valid variable name and the fourth an int (the dimension of the vector).
-     * The size of the vector cannot exceed MAX_VECTOR_SIZE (defined in utilities.h).
-     * See the invalid_var_name function in utilities.h for what constitutes a valid variable name.
-     *
-     * Returns 0 if the instruction is valid, or an error code otherwise (see utilities.h).
+    /* Returns a pointer to the set of visited nodes.
+     * This is used mainly for testing purposes.
      */
-    int is_valid_declare_vector_line(char *tokens[], int num_tokens);
+    unordered_set<Node *> *get_visited_nodes();
 
-    /* Determines whether the given tokens form a valid DEFINE instruction.
-     * Every DEFINE instruction begins with "define <var_name> = "
-     * A variable can be defined in one of four ways:
-     *
-     * 1. "define <var_name> = <primitive_operation> <operand 1> <operand 2>"
-     *  - the operation could be binary or unary and the operands could be other variables or constants
-     *  - the operation could be a vector operation. We do not check here whether "var_name" or the operands are actually vectors?????
-     *
-     * 2. "define <var_name> = <user-defined macro operation> <operand 1> <operand 2>"
-     *  - the same rules apply as for primitive operations
-     *  - additionally, the macro name must be a valid macro previously defined
-     *
-     * 3. "define <var_name> = <constant>"
-     * 
-     * 4. "define <var_name> = <another variable with a different name>"
-     *
-     * 
-     * This method returns 0 if the instruction is valid, or an error code otherwise (see utilities.h)
+    /* Returns a pointer to the set of visited node names.
+     * This is used mainly for testing purposes.
      */
-    int is_valid_define_line(char *tokens[], int num_tokens);
+    unordered_set<string> *get_visited_node_names();
+
+    /* Adds the declaration of a partial derivative to the GCP.
+     * The variable is the partial derivative of the Loss variable with respect to the variable represented by the given node.
+     * Returns the name of this variable.
+     *
+     * Returns an empty string if NODE or LOSS_NODE is NULL, or if the GCP ofstream is not open.
+     * Returns an empty string if NODE is a child of the loss node.
+     * Consider node X, a child of the loss node.
+     * The loss node (visited previously), will have already defined partial(loss, X).
+     * We must make sure this call to declare_partial_lambda(X, Loss, GCP) does not redefine partial(loss, X).
+     *
+     * Also returns an empty string if NODE has no parent.
+     * If this is the case, then LOSS_NODE is independent of NODE.
+     * partial(loss, X) is 0, and this is an unnecessary line in the GCP
+     */
+    string declare_partial_lambda(Node *node, Node *loss_node, ofstream& gcp);
+
+    /* Adds the definition of a partial derivative to the GCP.
+     * The variable defined is the partial derivative of the Loss variable with respect to the variable represented by the given node.
+     * partial(Loss, x) = partial(Loss, x.parent) * partial(x.parent, x)
+     */ 
+    void define_partial_lambda(Node *node, string loss_name, ofstream &gcp, string partial_var_name);
+
+    /* These two methods are nearly identical.
+     * They add the declaration of a partial derivative to the GCP.
+     * This is the partial derivative of the given node with respect to its first/second child.
+     * Returns the name of this variable.
+     * If the given node doesn't have a first/second child (or its first/second child is constant), returns an empty string.
+     */
+    string declare_child_one_partial(Node *node, ofstream &gcp);
+    string declare_child_two_partial(Node *node, ofstream &gcp);
+
+    /* These two methods are nearly identical.
+     * They add the definition of a partial derivative to the GCP.
+     * This is the partial derivative of the given node with respect to its first/second child.
+     * This partial derivative is calculated using basic Calculus rules for partial differentiation.
+     * If the given CHILD_ONE/TWO_PARTIAL is an empty string, does nothing.
+     */
+    void define_child_one_partial(Node *node, ofstream &gcp, string child_one_partial);
+    void define_child_two_partial(Node *node, ofstream &gcp, string child_two_partial);
+
 
 };
 
@@ -133,42 +155,14 @@ public:
 string generate_partial_var_name(const string& var1, const string& var2);
 
 /* Returns a string that is the name of the INTVAR_NUM-th intvar of VAR_NAME.
- * If var_name were "foo" and intvar_num were 2, this method would return "foo_2".
+ * If var_name were "foo" and intvar_num were 2, this method would return "foo:2".
  * This method is called when defining a partial derivative requires more than 1 line.
  * For example, defining "d/foo/d/bar" where foo = logistic bar requires 4 intvars.
  * These intvars represent e^bar, 1 + e^bar, (1 + e^bar)^2, and 1/(1 + e^bar)^2.
- * These intvars would be named "d/foo/d/bar_1", "d/foo/d/bar_2", "d/foo/d/bar_3" and "d/foo/d/bar_4".
+ * These intvars would be named "d/foo/d/bar:1", "d/foo/d/bar:2", "d/foo/d/bar:3" and "d/foo/d/bar:4".
  */
 string generate_intvar_name(const string& var_name, int intvar_num);
 
-/* Adds the declaration of a partial derivative to the GCP.
- * The variable is the partial derivative of the Loss variable with respect to the variable represented by the given node.
- * Returns the name of this variable.
- */
-string declare_partial_lambda(Node *node, string loss_name, ofstream &gcp);
-
-/* Adds the definition of a partial derivative to the GCP.
- * The variable defined is the partial derivative of the Loss variable with respect to the variable represented by the given node.
- * partial(Loss, x) = partial(Loss, x.parent) * partial(x.parent, x)
- */ 
-void define_partial_lambda(Node *node, string loss_name, ofstream &gcp, string partial_var_name);
-
-/* These two methods are nearly identical.
- * They add the declaration of a partial derivative to the GCP.
- * This is the partial derivative of the given node with respect to its first/second child.
- * Returns the name of this variable.
- * If the given node doesn't have a first/second child (or its first/second child is constant), returns an empty string.
- */
-string declare_child_one_partial(Node *node, ofstream &gcp);
-string declare_child_two_partial(Node *node, ofstream &gcp);
-
-/* These two methods are nearly identical.
- * They add the definition of a partial derivative to the GCP.
- * This is the partial derivative of the given node with respect to its first/second child.
- * This partial derivative is calculated using basic Calculus rules for partial differentiation.
- */
-void define_child_one_partial(Node *node, ofstream &gcp, string child_one_partial);
-void define_child_two_partial(Node *node, ofstream &gcp, string child_two_partial);
 
 
 

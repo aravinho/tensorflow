@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include "stdlib.h"
 
 #include "utilities.h"
 
@@ -51,6 +52,7 @@ struct macro {
 class Preprocessor {
 
 public:
+    
 	/* Maps variable names to their types. */
 	unordered_map<string, VariableType> *variables;
 	/* Maps vector names to their types. */
@@ -86,17 +88,17 @@ public:
 	/* Before a program can be compiled or interpreted, it must be expanded.
 	 * The preprocessor expands a program by breaking complex instructions into simpler primitives.
 	 * Instructions that require expanding are:
-	 * 	1. DECLARE_VECTOR instructions, 2. DEFINE instructions with vector operations, and 3. DEFINE instructions with macros.
+	 * 	1. DECLARE_VECTOR instructions, 2. DEFINE instructions with dot product operations, 3. DEFINE instructions with macros, 4. DEFINE_VECTOR_INSTRUCTIONS.
 	 * 
      * The declare_vector instruction gets broken down into as many regular declare instructions as there are elements in the vector.
      *
-     * ex. "declare_vector input x[3]" becomes:
+     * ex. "declare_vector input x 3" becomes:
      * "declare input x.1"
      * "declare input x.2"
      * "declare input x.3"
      *
-     * Defintions of variables as vector operations on vector variables get broken down into component-wise primitives.
-     * For example, the dot product of two vectors get broken up into several multiplications and additions.
+     * Defintions of variables as the dot product of two vector variables get broken down into component-wise primitives.
+     * The dot product of two vectors get broken up into several multiplications and additions.
      *
      * ex. "define_dot dot_prod = dot a b" becomes the following: (Assume dot_prod, a and b have been declared, and a and b are both two-element vectors.)
      * "declare dot_prod.1"
@@ -105,7 +107,33 @@ public:
      * "define dot_prod.2 = mul a.2 b.2"
      * "define dot_prod = add dot_prod.1 dot_prod.2"
      *
-     * Additionally, if a line is the definition of a user macro, parse_macro_line is called to parse and store this macro.
+     * Definitions of variables as the result of a macro operation get expanded into the sub-macro operations that make up the macro.
+     * Suppose the following macro was defined at the top of the Shape Program:
+     * "macro c = my_macro a b; define intvar p; declare p = add a b; define c = mul p p"
+     * The line "define z = my_macro x y" becomes the following:
+     * (Assume z, x and y have all been declared, and my_macro is being used for the 3rd time (reference counts are 0 indexed)):
+     * "declare z_p:2"
+     * "define z_p:2 = add x y"
+     * "define z = mul z_p:2 z_p:2"
+     *
+     * Definitions of vectors as operations on other vectors are expanded into component-wise operations.
+     * For example, "define_vector z = my_macro x q" gets expanded as follows:
+     * (Assume z and x are three-dimensional vectors, q is a scalar variable, and my_macro is the same user-defined binary macro as in the previous example)
+     * (This would now be the 4th, 5th and 6th references of my_macro):
+     * 
+     * "declare z.0_p:3"
+     * "declare z.0_p:3 = add x.0 q"
+     * "define z.0 = mul z.0_p:3 z.0_p:3"
+     * "declare z.1_p:4"
+     * "declare z.1_p:4 = add x.1 q"
+     * "define z.1 = mul z.1_p:4 z.1_p:4"
+     * "declare z.2_p:5"
+     * "declare z.2_p:5 = add x.2 q"
+     * "define z.2 = mul z.2_p:5 z.2_p:5"
+     *
+     *
+     * Finally, if a line is the definition of a user macro, parse_macro_line is called to parse and store this macro.
+     * Nothing is written to the Expanded Program for macro definitions.
      *
      * This method reads from the Program, and writes to an Expanded Program file.
      * The Expanded Shape Program can now be compiled or interpreted.
@@ -144,13 +172,38 @@ public:
 
     /* Expands a DEFINE instruction, copying the expanded lines into EXP_PROG.
      * DEFINE instructions need expanding if they involve vector operations or user-defined macros.
-     * Vector operations are expanded into component wise operations (see vector expansion methods below).
+     * Dot product operations are expanded into component wise operations (see dot product expansion methods below).
      * Macro instructions are expanded directly based on the user given macro (see expand_unary_macro and expand_binary_macro).
      *
      * If the instruction requires no expanding, nothing is done and 0 is returned.
      * Otherwise, this method returns the number of expanded lines.
      */
     int expand_define_instruction(const string& line, ofstream& exp_prog);
+
+    /* Expands a DEFINE_VECTOR instruction, copying the expanded lines into EXP_PROG.
+     * DEFINE_VECTOR instructions define a vector, as opposed to DEFINE instructions which define a scalar variable.
+     * This method expands the DEFINE_VECTOR instruction into operations on vector components.
+     *
+     * Every DEFINE_VECTOR instruction resembles "define_vector <vec_name> = <operand_vector> <optional operand2 (vector, variable or constant)>"
+     * A vector can be defined in one of the following ways:
+     *
+     * 1. as a binary primitive/macro operation on two vectors of the same dimension.
+     * 2. as a binary primitive/macro operation on a vector and a scalar variable.
+     * 3. as a binary primitive/macro operation on a vector and a constant.
+     * 4. as a unary primitive/macro operation on a vector.
+     *
+     * A DEFINE_VECTOR operation executes the given operation on every component of the vector.
+     * For example, "define_vector z = add x y" adds vectors x and y component-wise and the resulting vector is z.
+     * It gets expanded to {"define z.0 = add x.0 y.0", "define z.1 = add x.1 y.1", "define z.2 = add x.2 y.2", etc.}.
+     *
+     * "define_vector z = my_binary_macro x q" defines the i-th component of the vector z as the result of applying my_binary_macro to x[i] and q.
+     * It gets expanded into component-wise macro operations, which are further expanded using the rules of macro expansion.
+     *
+     * Note that DOT PRODUCT operations fall under DEFINE lines, since they define a variable, not a vector.
+     *
+     * This method returns the number of expanded lines, which is equal to the dimension of the vectors involved.
+     */
+    int expand_define_vector_instruction(const string& line, ofstream &exp_prog);
 
     /* This method expands a DEFINE instruction that defines a variable/vector as the result of a vector operation.
 	 * RESULT is the variable/vector being defined, and OPERAND1 and OPERAND2 are the operand vectors/constants/variables.
@@ -365,8 +418,8 @@ public:
      * 2. "define <var_name> = <user-defined macro operation> <operand 1> <operand 2>"
      *  - The macro must have been previously defined, the same rules apply as for primitive operations.
      *
-     * 3. "define <var_name> = <vector operation> <operand 1> <operand 2>"
-     * 	- for binary vector operations, both operand vectors and the result vector must be of the same dimension.
+     * 3. "define <var_name> = <dot product> <vector operand 1> <vector operand 2>"
+     * 	- for dot product operations, both operand vectors must be of the same dimension.
      *
      * 4. "define <var_name> = <constant>"
      * 
@@ -375,6 +428,31 @@ public:
      * This method returns 0 if the instruction is valid, or an error code otherwise (see utilities.h)
      */
     int is_valid_define_line(const string& line);
+
+    /* Determines whether the given LINE is a valid DEFINE_VECTOR instruction.
+     * A vector must be declared before it is defined, and cannot be defined twice.
+     * All the operand vectors/variables must be defined.
+     * The dimension of the defined vector must match the dimensions of all operands that are vectors.
+     * Input, weight, and expected output vectors cannot be defined.
+     *
+     * Every DEFINE_VECTOR instruction resembles "define_vector <vec_name> = <operand_vector> <optional operand2 (vector, variable or constant)>"
+     * A vector can be defined in one of the following ways:
+     *
+     * 1. as a binary primitive/macro operation on two vectors of the same dimension.
+     * 2. as a binary primitive/macro operation on a vector and a scalar variable.
+     * 3. as a binary primitive/macro operation on a vector and a constant.
+     * 4. as a unary primitive/macro operation on a vector.
+     *
+     * A DEFINE_VECTOR operation executes the given operation on every component of the vector.
+     * For example, "define_vector z = add x y" adds vectors x and y component-wise and the resulting vector is z.
+     * "define_vector z = my_binary_macro x q" defines the i-th component of the vector z as the result of applying my_binary_macro to x[i] and q.
+     *
+     * Note that DOT PRODUCT operations are DEFINE instructions, since they define a scalar variable, not a vector
+     *
+     * This method returns 0 if the instruction is valid, or an error code otherwise (see utilities.h)
+     */
+    int is_valid_define_vector_line(const string& line);
+
 
     /* Returns whether a macro with the given NAME has been successfully defined earlier. */
 	bool is_valid_macro(const string& name);

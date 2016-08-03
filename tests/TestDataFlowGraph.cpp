@@ -28,7 +28,7 @@ void test_dfg_destructor() {
 
 	Node *n = new Node("n", false);
 	d->get_node("a")->set_child(n);
-	n->set_parent(d->get_node("a"));
+	n->add_parent(d->get_node("a"));
 
 	delete d; delete n;
 
@@ -59,7 +59,8 @@ void test_dfg_add_node() {
 	assert_equal_int(d->add_node(loss), 0, "test_dfg_add_node");
 	assert_equal_string(d->get_loss_var_name(), "loss", "test_dfg_add_node");
 	assert_true(d->get_loss_node() == loss, "Loss node should be LOSS", "test_dfg_add_node");
-	assert_true(loss->get_parent() == loss, "Loss' parent should be itself", "test_dfg_add_node");
+	assert_equal_int(loss->get_parents()->count(loss), 1, "test_dfg_add_node");
+	assert_equal_int(loss->get_parent_names()->count("loss"), 1, "test_dfg_add_node");
 
 	// add another loss node
 	Node *loss_two = new Node("loss_two", false);
@@ -112,7 +113,8 @@ void test_dfg_add_flow_edge() {
 	// check child's parent and parent's child got correctly set
 	d->add_node(child);
 	assert_true(d->add_flow_edge("child", "parent"), "Add flow edge should've succeeded", "test_dfg_add_flow_edge");
-	assert_true(child->get_parent() == parent, "Child's parent should be PARENT", "test_dfg_add_flow_edge");
+	assert_equal_int(child->get_parents()->count(parent), 1, "test_dfg_add_flow_edge");
+	assert_equal_int(child->get_parent_names()->count("parent"), 1, "test_dfg_add_flow_edge");
 	assert_true(parent->get_child_one() == child, "Parent's first child should be CHILD", "test_dfg_add_flow_edge");
 
 	// add constant child
@@ -201,6 +203,7 @@ void test_dfg_top_sort() {
 
 	DataFlowGraph d;
 	Node *a = new Node("a", false);
+	a->set_type(VariableType::LOSS);
 	Node *b = new Node("b", false);
 	d.add_node(a);
 	d.add_node(b);
@@ -214,16 +217,16 @@ void test_dfg_top_sort() {
 	d.top_sort(sorted_nodes);
 
 	// test all nodes are permanent marked after sort
-	assert_true(a->is_permanent_marked(), "A must be permanent marked", "test_dfg_top_sort_visit");
-	assert_true(b->is_permanent_marked(), "A must be permanent marked", "test_dfg_top_sort_visit");
-	assert_true(c->is_permanent_marked(), "A must be permanent marked", "test_dfg_top_sort_visit");
+	assert_true(a->is_permanent_marked(), "A must be permanent marked", "test_dfg_top_sort");
+	assert_true(b->is_permanent_marked(), "A must be permanent marked", "test_dfg_top_sort");
+	assert_true(c->is_permanent_marked(), "A must be permanent marked", "test_dfg_top_sort");
 
 	// test the order is A, B, C
 	int i = 0;
 	for (list<Node *>::iterator it = sorted_nodes->begin(); it != sorted_nodes->end(); ++it) {
-		if (i == 0) assert_equal_string((*it)->get_name(), "a", "test_dfg_top_sort_visit");
-		if (i == 1) assert_equal_string((*it)->get_name(), "b", "test_dfg_top_sort_visit");
-		if (i == 2) assert_equal_string((*it)->get_name(), "c", "test_dfg_top_sort_visit");
+		if (i == 0) assert_equal_string((*it)->get_name(), "a", "test_dfg_top_sort");
+		if (i == 1) assert_equal_string((*it)->get_name(), "b", "test_dfg_top_sort");
+		if (i == 2) assert_equal_string((*it)->get_name(), "c", "test_dfg_top_sort");
 		i++;
 	}
 

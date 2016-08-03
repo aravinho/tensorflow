@@ -28,15 +28,21 @@ using namespace std;
 
 class Interpreter {
 
-	BindingsDictionary bindings;
+	BindingsDictionary *bindings;
 	unordered_map<string, VariableType>* var_types;
 
 public:
 
 	/* Constructor.
 	 * Initializes var_types to be an empty unordered map.
+	 * Initializes the Bindings Dictionary.
 	 */
 	Interpreter();
+
+	/* Destructor.
+	 * Deletes the var_types map, and the Bindings Dictionary.
+	 */
+	~Interpreter();
 
 	/* Interprets the program stored in the file with the given filename.
 	 * Takes in a "vector" of inputs in the form of an unordered map of {name, value} pairs.
@@ -62,6 +68,21 @@ public:
 	 * This method returns 0 on success, and the appropriate error code on failure (see utilities.h).
 	 */
 	int parse_line(const string& line, const unordered_map<string, float>& inputs);
+
+	/* Iterates through all the variables in the BindingsDictionary.
+	 * If a variable is an OUTPUT variable,
+	 *	adds the name-value pair to the given map of outputs.
+	 *
+	 * This method is called after every line has been parsed.
+	 */
+	void accumulate_outputs(unordered_map<string, float> *outputs);
+
+	/* Returns the BindingsDictionary of this Interpreter. */
+	BindingsDictionary *get_bindings_dictionary();
+
+	/* Returns the VAR_TYPES map of this Interpreter. */
+	unordered_map<string, VariableType> *get_var_types();
+
 
 };
 

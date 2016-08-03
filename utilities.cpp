@@ -19,6 +19,9 @@ InstructionType get_instruction_type(const string &inst_type) {
     if (inst_type.compare("declare_vector") == 0) {
         return InstructionType::DECLARE_VECTOR;
     }
+    if (inst_type.compare("define_vector") == 0) {
+        return InstructionType::DEFINE_VECTOR;
+    }
     if (inst_type.compare("#macro") == 0) {
         return InstructionType::MACRO;
     }
@@ -147,6 +150,13 @@ bool is_valid_var_name(const string& name) {
     return true;
 }
 
+
+bool is_valid_expanded_var_name(const string& name) {
+    if (name.compare("") == 0) return false;
+    if (is_keyword(name)) return false;
+    return true;
+}
+
 bool is_valid_operation(const string& oper_name) {
     return get_operation_type(oper_name) != OperationType::INVALID_OPERATION;
 }
@@ -185,6 +195,11 @@ bool is_binary_vector_operation(const string& name) {
 bool is_unary_vector_operation(const string& name) {
     OperationType oper_type = get_operation_type(name);
     return oper_type == OperationType::SCALE_VECTOR || oper_type == OperationType::INCREMENT_VECTOR;
+}
+
+bool is_dot_product(const string& name) {
+    OperationType oper_type = get_operation_type(name);
+    return oper_type == OperationType::DOT;
 }
 
 

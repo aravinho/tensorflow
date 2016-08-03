@@ -8,30 +8,29 @@
 using namespace std;
 
 
-void test_pp_constructor() {
+void test_pp_constructor_expand_destructor() {
 
 	// test constructor initializes maps, set, and bool correctly
-	Preprocessor p;
-	assert_equal_int(p.variables->size(), 0, "test_pp_constructor");
-	assert_equal_int(p.vectors->size(), 0, "test_pp_constructor");
-	assert_equal_int(p.vector_dimensions->size(), 0, "test_pp_constructor");
-	assert_equal_int(p.defined_variables->size(), 0, "test_pp_constructor");
-	assert_equal_int(p.macros->size(), 0, "test_pp_constructor");
-	assert_false(p.macros_done, "Macros_done must initially be false", "test_pp_constructor");
-
-	pass("test_pp_constructor");
-
-}
-
-void test_pp_destructor() {
-
-	// test destructor deletes maps and set without problems
 	Preprocessor *p = new Preprocessor();
-	p->expand_program("shape_prog.tf", "exp_shape.tf");
-	delete p;
+	assert_equal_int(p->variables->size(), 0, "test_pp_constructor_expand_destructor");
+	assert_equal_int(p->vectors->size(), 0, "test_pp_constructor_expand_destructor");
+	assert_equal_int(p->vector_dimensions->size(), 0, "test_pp_constructor_expand_destructor");
+	assert_equal_int(p->defined_variables->size(), 0, "test_pp_constructor_expand_destructor");
+	assert_equal_int(p->macros->size(), 0, "test_pp_constructor_expand_destructor");
+	assert_false(p->macros_done, "Macros_done must initially be false", "test_pp_constructor_expand_destructor");
 
-	pass("test_pp_destructor");
+	// preprocess the test Shape Program
+	// involves all the primitive and vector operations, and macros
+	// make sure the output is identical to the expected output
+	assert_equal_int(p->expand_program("tests/test_files/inputs/shape_simple.tf", "tests/test_files/outputs/expanded_shape_simple.tf"), 0, "test_pp_constructor_expand_destructor");
+	assert_identical_files("tests/test_files/outputs/expanded_shape_simple.tf", "tests/test_files/exp_outputs/expanded_shape_simple.tf", "test_pp_constructor_expand_destructor");
+
+	// test destructor deletes member variables without problems
+	delete p;
+	pass("test_pp_constructor_expand_destructor");
+
 }
+
 
 void test_pp_expand_line() {
 
@@ -97,7 +96,7 @@ void test_pp_expand_line() {
 	assert_equal_int(p.defined_variables->count("output_vec"), 0, "test_pp_expand_line");
 
 	// define the vector OUTPUT_VEC. Make sure it gets marked as defined
-	assert_equal_int(p.expand_line("define output_vec = scale_vector input_vec p", write_scratch_file), 3, "test_pp_expand_line");
+	assert_equal_int(p.expand_line("define_vector output_vec = mul input_vec p", write_scratch_file), 3, "test_pp_expand_line");
 	assert_equal_int(p.defined_variables->count("output_vec"), 1, "test_pp_expand_line");
 
 	read_scratch_file.close();
@@ -172,6 +171,100 @@ void test_pp_expand_define() {
 	read_scratch_file.close();
 
 	pass("test_pp_expand_define");
+
+}
+
+void test_pp_expand_define_vector() {
+
+	Preprocessor p;
+	ofstream write_scratch_file("scratch.tf");
+
+	// define two macros which will be used later in this test
+	p.expand_line("#macro c = my_binary_macro a b; declare intvar p; define p = pow a b; define c = ln p", write_scratch_file);
+	p.expand_line("#macro z = my_unary_macro x; declare intvar q; define z = logistic x", write_scratch_file);
+
+	// declare variables
+	assert_equal_int(p.expand_line("declare_vector input x 3", write_scratch_file), 3, "test_pp_expand_define_vector");
+	assert_equal_int(p.expand_line("declare_vector exp_output y 3", write_scratch_file), 3, "test_pp_expand_define_vector");
+	assert_equal_int(p.expand_line("declare_vector weight w 3", write_scratch_file), 3, "test_pp_expand_define_vector");
+	
+	assert_equal_int(p.expand_line("declare_vector intvar a 3", write_scratch_file), 3, "test_pp_expand_define_vector");
+	assert_equal_int(p.expand_line("declare_vector intvar b 3", write_scratch_file), 3, "test_pp_expand_define_vector");
+	assert_equal_int(p.expand_line("declare_vector intvar c 3", write_scratch_file), 3, "test_pp_expand_define_vector");
+	assert_equal_int(p.expand_line("declare_vector intvar d 3", write_scratch_file), 3, "test_pp_expand_define_vector");
+	assert_equal_int(p.expand_line("declare_vector intvar e 3", write_scratch_file), 3, "test_pp_expand_define_vector");
+	assert_equal_int(p.expand_line("declare_vector intvar f 3", write_scratch_file), 3, "test_pp_expand_define_vector");
+	assert_equal_int(p.expand_line("declare_vector intvar g 3", write_scratch_file), 3, "test_pp_expand_define_vector");
+	assert_equal_int(p.expand_line("declare_vector intvar h 3", write_scratch_file), 3, "test_pp_expand_define_vector");
+
+	assert_equal_int(p.expand_line("declare input p", write_scratch_file), 1, "test_pp_expand_define_vector");
+	assert_equal_int(p.expand_line("declare input q", write_scratch_file), 1, "test_pp_expand_define_vector");
+
+
+
+	// binary primitive on two vectors
+	assert_equal_int(p.expand_define_vector_instruction("define_vector a = add x w", write_scratch_file), 3, "test_pp_expand_define_vector");
+	string addxw[3] = {"define a.0 = add x.0 w.0", "define a.1 = add x.1 w.1", "define a.2 = add x.2 w.2"};
+	assert_equal_file_lines("scratch.tf", addxw, 35, 3, "test_pp_expand_define_vector");
+	
+	// binary primitive on a vector and a variable
+	assert_equal_int(p.expand_define_vector_instruction("define_vector b = mul a p", write_scratch_file), 3, "test_pp_expand_define_vector");
+	string mulap[3] = {"define b.0 = mul a.0 p", "define b.1 = mul a.1 p", "define b.2 = mul a.2 p"};
+	assert_equal_file_lines("scratch.tf", mulap, 38, 3, "test_pp_expand_define_vector");
+	
+	// binary primitive on a vector and a constant
+	assert_equal_int(p.expand_define_vector_instruction("define_vector c = pow b 2", write_scratch_file), 3, "test_pp_expand_define_vector");
+	string powb2[3] = {"define c.0 = pow b.0 2", "define c.1 = pow b.1 2", "define c.2 = pow b.2 2"};
+	assert_equal_file_lines("scratch.tf", powb2, 41, 3, "test_pp_expand_define_vector");
+	
+
+
+	// binary macro on two vectors
+	assert_equal_int(p.expand_define_vector_instruction("define_vector d = my_binary_macro x w", write_scratch_file), 3, "test_pp_expand_define_vector");
+	string macroxw[9] = {
+		"declare intvar d.0_p0", "define d.0_p0 = pow x.0 w.0", "define d.0 = ln d.0_p0",
+		"declare intvar d.1_p1", "define d.1_p1 = pow x.1 w.1", "define d.1 = ln d.1_p1",
+		"declare intvar d.2_p2", "define d.2_p2 = pow x.2 w.2", "define d.2 = ln d.2_p2"
+	};
+	assert_equal_file_lines("scratch.tf", macroxw, 44, 9, "test_pp_expand_define_vector");
+	
+	// binary macro on a vector and a variable
+	assert_equal_int(p.expand_define_vector_instruction("define_vector e = my_binary_macro d q", write_scratch_file), 3, "test_pp_expand_define_vector");
+	string macrodq[9] = {
+		"declare intvar e.0_p3", "define e.0_p3 = pow d.0 q", "define e.0 = ln e.0_p3",
+		"declare intvar e.1_p4", "define e.1_p4 = pow d.1 q", "define e.1 = ln e.1_p4",
+		"declare intvar e.2_p5", "define e.2_p5 = pow d.2 q", "define e.2 = ln e.2_p5"
+	};
+	assert_equal_file_lines("scratch.tf", macrodq, 53, 9, "test_pp_expand_define_vector");
+	
+	// binary macro on a vector and a constant
+	assert_equal_int(p.expand_define_vector_instruction("define_vector f = my_binary_macro e -3", write_scratch_file), 3, "test_pp_expand_define_vector");
+	string macroe3[9] = {
+		"declare intvar f.0_p6", "define f.0_p6 = pow e.0 -3", "define f.0 = ln f.0_p6",
+		"declare intvar f.1_p7", "define f.1_p7 = pow e.1 -3", "define f.1 = ln f.1_p7",
+		"declare intvar f.2_p8", "define f.2_p8 = pow e.2 -3", "define f.2 = ln f.2_p8"
+	};
+	assert_equal_file_lines("scratch.tf", macroe3, 62, 9, "test_pp_expand_define_vector");
+
+
+
+	// unary primitive on a vector
+	assert_equal_int(p.expand_define_vector_instruction("define_vector g = logistic x", write_scratch_file), 3, "test_pp_expand_define_vector");
+	string logx[3] = {"define g.0 = logistic x.0", "define g.1 = logistic x.1", "define g.2 = logistic x.2"};
+	assert_equal_file_lines("scratch.tf", logx, 71, 3, "test_pp_expand_define_vector");
+
+
+	// unary macro on a vector
+	assert_equal_int(p.expand_define_vector_instruction("define_vector h = my_unary_macro g", write_scratch_file), 3, "test_pp_expand_define_vector");
+	string macrog[9] = {
+		"declare intvar h.0_q0", "define h.0 = logistic g.0", 
+		"declare intvar h.1_q1", "define h.1 = logistic g.1",
+		"declare intvar h.2_q2", "define h.2 = logistic g.2",
+	};
+	assert_equal_file_lines("scratch.tf", macrog, 74, 6, "test_pp_expand_define_vector");
+
+	write_scratch_file.close();
+	pass("test_pp_expand_define_vector");
 
 }
 
@@ -272,11 +365,11 @@ void test_pp_expand_unary_macro() {
 	write_scratch_file.close();
 
 	// make sure the definition of z expands correctly
-	string z_expansion[3] = {"declare intvar b0", "define b0 = add x 3", "define z = mul b0 b0"};
+	string z_expansion[3] = {"declare intvar z_b0", "define z_b0 = add x 3", "define z = mul z_b0 z_b0"};
 	assert_equal_file_lines("scratch.tf", z_expansion, 3, 3, "test_pp_expand_unary_macro");
 
 	// make sure the definition of o expands correctly
-	string o_expansion[3] = {"declare intvar b1", "define b1 = add z 3", "define o = mul b1 b1"};
+	string o_expansion[3] = {"declare intvar o_b1", "define o_b1 = add z 3", "define o = mul o_b1 o_b1"};
 	assert_equal_file_lines("scratch.tf", o_expansion, 6, 3, "test_pp_expand_unary_macro");
 
 	pass("test_pp_expand_unary_macro");
@@ -310,11 +403,11 @@ void test_pp_expand_binary_macro() {
 	write_scratch_file.close();
 
 	// make sure the definition of z expands correctly
-	string z_expansion[3] = {"declare intvar q0", "define q0 = ln x", "define z = pow y q0"};
+	string z_expansion[3] = {"declare intvar z_q0", "define z_q0 = ln x", "define z = pow y z_q0"};
 	assert_equal_file_lines("scratch.tf", z_expansion, 4, 3, "test_pp_expand_binary_macro");
 
 	// make sure the definition of o expands correctly
-	string o_expansion[3] = {"declare intvar q1", "define q1 = ln z", "define o = pow y q1"};
+	string o_expansion[3] = {"declare intvar o_q1", "define o_q1 = ln z", "define o = pow y o_q1"};
 	assert_equal_file_lines("scratch.tf", o_expansion, 7, 3, "test_pp_expand_binary_macro");
 
 	pass("test_pp_expand_binary_macro");
@@ -328,29 +421,29 @@ void test_pp_substitute_dummy_names() {
 	// 	#macro c = my_macro a b; declare intvar q; define q = pow a b; declare intvar p; define p = exp q; define c = ln p
 	// the substitution happens during the expansion of the line "define z = my_macro x y"
 	assert_equal_string(p.substitute_dummy_names("declare intvar q", "c", "a", "b", "z", "x", "y", 0),
-		"declare intvar q0", "test_pp_substitute_dummy_names");
+		"declare intvar z_q0", "test_pp_substitute_dummy_names");
 	assert_equal_string(p.substitute_dummy_names("define q = pow a b", "c", "a", "b", "z", "x", "y", 0),
-		"define q0 = pow x y", "test_pp_substitute_dummy_names");
+		"define z_q0 = pow x y", "test_pp_substitute_dummy_names");
 	assert_equal_string(p.substitute_dummy_names("declare intvar p", "c", "a", "b", "z", "x", "y", 0),
-		"declare intvar p0", "test_pp_substitute_dummy_names");
+		"declare intvar z_p0", "test_pp_substitute_dummy_names");
 	assert_equal_string(p.substitute_dummy_names("define p = exp q", "c", "a", "b", "z", "x", "y", 0),
-		"define p0 = exp q0", "test_pp_substitute_dummy_names");
+		"define z_p0 = exp z_q0", "test_pp_substitute_dummy_names");
 	assert_equal_string(p.substitute_dummy_names("define c = ln p", "c", "a", "b", "z", "x", "y", 0),
-		"define z = ln p0", "test_pp_substitute_dummy_names");
+		"define z = ln z_p0", "test_pp_substitute_dummy_names");
 
 	// test substituting of dummy names for this macro:
 	// 	#macro c = my_macro a b; declare intvar q; define q = logistic b; declare intvar x; define x = mul q a; define c = add x b
 	// the substitution happens during the expansion of the line "define z = my_macro x a"
 	assert_equal_string(p.substitute_dummy_names("declare intvar q", "c", "a", "b", "z", "x", "a", 1),
-		"declare intvar q1", "test_pp_substitute_dummy_names");
+		"declare intvar z_q1", "test_pp_substitute_dummy_names");
 	assert_equal_string(p.substitute_dummy_names("define q = logistic b", "c", "a", "b", "z", "x", "a", 1),
-		"define q1 = logistic a", "test_pp_substitute_dummy_names");
+		"define z_q1 = logistic a", "test_pp_substitute_dummy_names");
 	assert_equal_string(p.substitute_dummy_names("declare intvar x", "c", "a", "b", "z", "x", "a", 1),
-		"declare intvar x1", "test_pp_substitute_dummy_names");
+		"declare intvar z_x1", "test_pp_substitute_dummy_names");
 	assert_equal_string(p.substitute_dummy_names("define x = mul q a", "c", "a", "b", "z", "x", "a", 1),
-		"define x1 = mul q1 x", "test_pp_substitute_dummy_names");
+		"define z_x1 = mul z_q1 x", "test_pp_substitute_dummy_names");
 	assert_equal_string(p.substitute_dummy_names("define c = add x b", "c", "a", "b", "z", "x", "a", 1),
-		"define z = add x1 a", "test_pp_substitute_dummy_names");
+		"define z = add z_x1 a", "test_pp_substitute_dummy_names");
 
 
 	pass("test_pp_substitute_dummy_names");
@@ -757,7 +850,7 @@ void test_pp_is_valid_define_line() {
 	Preprocessor p;
 	ofstream write_scratch_file("scratch.tf");
 
-	// define two macros which will be used later in this function
+	// define two macros which will be used later in this test
 	p.expand_line("#macro c = my_binary_macro a b; declare intvar p; define p = pow a b; define c = ln p", write_scratch_file);
 	p.expand_line("#macro z = my_unary_macro x; declare intvar q; define z = logistic x", write_scratch_file);
 
@@ -826,7 +919,6 @@ void test_pp_is_valid_define_line() {
 	assert_equal_int(p.is_valid_define_line("define p = w"), 0, "test_pp_is_valid_define_line");
 	assert_equal_int(p.is_valid_define_line("define p = z"), 0, "test_pp_is_valid_define_line");
 
-
 	p.expand_line("declare_vector intvar u 3", write_scratch_file);
 	p.expand_line("declare_vector input v 3", write_scratch_file);
 	p.expand_line("declare_vector output t 3", write_scratch_file);
@@ -836,42 +928,21 @@ void test_pp_is_valid_define_line() {
 	assert_equal_int(p.is_valid_define_line("define n = dot u v"), VAR_DEFINED_BEFORE_DECLARED, "test_pp_is_valid_define_line");
 	assert_equal_int(p.is_valid_define_line("define z = dot u v"), VAR_DEFINED_TWICE, "test_pp_is_valid_define_line");
 	assert_equal_int(p.is_valid_define_line("define t = dot u u"), VAR_DEFINED_BEFORE_DECLARED, "test_pp_is_valid_define_line");
-	assert_equal_int(p.is_valid_define_line("define g = component_wise_add u v"), VAR_DEFINED_BEFORE_DECLARED, "test_pp_is_valid_define_line");
-	assert_equal_int(p.is_valid_define_line("define v = scale_vector u 3"), CANNOT_DEFINE_I_W_EO, "test_pp_is_valid_define_line");
 
 	// some errors with binary vector operation definitions
 	assert_equal_int(p.is_valid_define_line("define p = dot u v t"), INVALID_LINE, "test_pp_is_valid_define_line");
 	assert_equal_int(p.is_valid_define_line("define p = dot v"), INVALID_LINE, "test_pp_is_valid_define_line");
-	assert_equal_int(p.is_valid_define_line("define t = component_wise_add x v"), VAR_REFERENCED_BEFORE_DEFINED, "test_pp_is_valid_define_line");
-	assert_equal_int(p.is_valid_define_line("define t = component_wise_mul u w"), VAR_REFERENCED_BEFORE_DEFINED, "test_pp_is_valid_define_line");
 	assert_equal_int(p.is_valid_define_line("define p = dot u v"), VAR_REFERENCED_BEFORE_DEFINED, "test_pp_is_valid_define_line");
-	assert_equal_int(p.is_valid_define_line("define t = component_wise_add u u"), VAR_REFERENCED_BEFORE_DEFINED, "test_pp_is_valid_define_line");
-	assert_equal_int(p.is_valid_define_line("define f = component_wise_mul v v"), VECTORS_OF_DIFFERENT_DIMENSION, "test_pp_is_valid_define_line");
 	assert_equal_int(p.is_valid_define_line("define p = dot v f"), VECTORS_OF_DIFFERENT_DIMENSION, "test_pp_is_valid_define_line");
 
 	// some successful binary vector operation definitions
 	assert_equal_int(p.is_valid_define_line("define p = dot v v"), 0, "test_pp_is_valid_define_line");
-	p.expand_line("define u = scale_vector v 2", write_scratch_file);
-	assert_equal_int(p.is_valid_define_line("define t = component_wise_mul u v"), 0, "test_pp_is_valid_define_line");
-	assert_equal_int(p.is_valid_define_line("define t = component_wise_add v u"), 0, "test_pp_is_valid_define_line");
+
+	p.expand_line("define_vector u = mul v 2", write_scratch_file);
+	assert_equal_int(p.is_valid_define_line("define q = dot u v"), 0, "test_pp_is_valid_define_line");
 
 
-	// some errors with unary vector operation definitions
-	assert_equal_int(p.is_valid_define_line("define p = scale_vector u"), VAR_DEFINED_BEFORE_DECLARED, "test_pp_is_valid_define_line");
-	assert_equal_int(p.is_valid_define_line("define t = increment_vector u 3 4"), INVALID_LINE, "test_pp_is_valid_define_line");
-	assert_equal_int(p.is_valid_define_line("define t = scale_vector x y"), VAR_REFERENCED_BEFORE_DEFINED, "test_pp_is_valid_define_line");
-	assert_equal_int(p.is_valid_define_line("define t = increment_vector t 2"), VAR_REFERENCED_BEFORE_DEFINED, "test_pp_is_valid_define_line");
-	assert_equal_int(p.is_valid_define_line("define f = scale_vector v 5"), VECTORS_OF_DIFFERENT_DIMENSION, "test_pp_is_valid_define_line");
-	assert_equal_int(p.is_valid_define_line("define t = increment_vector v n"), VAR_REFERENCED_BEFORE_DEFINED, "test_pp_is_valid_define_line");
-	
-	// some successful unary vector operations definitions
-	assert_equal_int(p.is_valid_define_line("define t = scale_vector v 3"), 0, "test_pp_is_valid_define_line");
-	assert_equal_int(p.is_valid_define_line("define t = scale_vector u w"), 0, "test_pp_is_valid_define_line");
-	assert_equal_int(p.is_valid_define_line("define t = increment_vector v -1"), 0, "test_pp_is_valid_define_line");
-	assert_equal_int(p.is_valid_define_line("define t = increment_vector u z"), 0, "test_pp_is_valid_define_line");
-
-
-	// some general erros with using a macro in a definition
+	// some general errors with using a macro in a definition
 	assert_equal_int(p.is_valid_define_line("define p = non_existent_macro x w"), INVALID_LINE, "test_pp_is_valid_define_line");
 	assert_equal_int(p.is_valid_define_line("define foo = my_binary_macro x w"), VAR_DEFINED_BEFORE_DECLARED, "test_pp_is_valid_define_line");
 	assert_equal_int(p.is_valid_define_line("define z = my_unary_macro x"), VAR_DEFINED_TWICE, "test_pp_is_valid_define_line");
@@ -899,6 +970,92 @@ void test_pp_is_valid_define_line() {
 
 	write_scratch_file.close();
 	pass("test_pp_is_valid_define_line");
+
+}
+
+void test_pp_is_valid_define_vector_line() {
+
+	Preprocessor p;
+	ofstream write_scratch_file("scratch.tf");
+
+	// define two macros which will be used later in this test
+	p.expand_line("#macro c = my_binary_macro a b; declare intvar p; define p = pow a b; define c = ln p", write_scratch_file);
+	p.expand_line("#macro z = my_unary_macro x; declare intvar q; define z = logistic x", write_scratch_file);
+
+	// simple errors
+	assert_equal_int(p.is_valid_define_vector_line(""), OTHER_ERROR, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("declare weight x"), INVALID_LINE, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector x y"), INVALID_LINE, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector x = add a b c"), INVALID_LINE, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("defin_vector x = ln y"), INVALID_LINE, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector add = add x y"), INVALID_LINE, "test_pp_is_valid_define_vector_line");
+	
+	// cannot define input, weight or exp_output vectors
+	p.expand_line("declare_vector input x 3", write_scratch_file);
+	p.expand_line("declare_vector weight w 3", write_scratch_file);
+	p.expand_line("declare_vector exp_output y 5", write_scratch_file);
+	assert_equal_int(p.is_valid_define_vector_line("define_vector x = add y 3"), CANNOT_DEFINE_I_W_EO, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector w = mul x x"), CANNOT_DEFINE_I_W_EO, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector y = my_unary_macro w"), CANNOT_DEFINE_I_W_EO, "test_pp_is_valid_define_vector_line");
+
+	// cannot define vectors that are not declared
+	assert_equal_int(p.is_valid_define_vector_line("define_vector a = exp w"), VAR_DEFINED_BEFORE_DECLARED, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector b = add x x"), VAR_DEFINED_BEFORE_DECLARED, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector c = my_binary_macro x w"), VAR_DEFINED_BEFORE_DECLARED, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector d = logistic x"), VAR_DEFINED_BEFORE_DECLARED, "test_pp_is_valid_define_vector_line");
+
+	// cannot define vectors that have already been defined
+	p.expand_line("declare_vector intvar z 3", write_scratch_file);
+	p.expand_line("define_vector z = mul x w", write_scratch_file);
+	assert_equal_int(p.is_valid_define_vector_line("define_vector z = exp w"), VAR_DEFINED_TWICE, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector z = add x w"), VAR_DEFINED_TWICE, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector z = my_binary_macro x w"), VAR_DEFINED_TWICE, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector z = ln x"), VAR_DEFINED_TWICE, "test_pp_is_valid_define_vector_line");
+
+	// declare intvar vectors P and Q
+	// declare input M and intvar vectors A and B
+	p.expand_line("declare_vector intvar p 3", write_scratch_file);
+	p.expand_line("declare_vector intvar q 4", write_scratch_file);
+	p.expand_line("declare input m", write_scratch_file);
+	p.expand_line("declare_vector intvar a 3", write_scratch_file);
+
+	// some simple errors with binary primitive/macro definitions
+	assert_equal_int(p.is_valid_define_vector_line("define_vector p = add x"), INVALID_LINE, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector p = pow m 2"), VAR_REFERENCED_BEFORE_DEFINED, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector p = my_binary_macro a m"), VAR_REFERENCED_BEFORE_DEFINED, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector q = my_binary_macro x m"), VECTORS_OF_DIFFERENT_DIMENSION, "test_pp_is_valid_define_vector_line");
+
+	// some errors with binary primitive/macro operations on two vectors
+	assert_equal_int(p.is_valid_define_vector_line("define_vector p = mul x a"), VAR_REFERENCED_BEFORE_DEFINED, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector p = my_binary_macro x y"), VECTORS_OF_DIFFERENT_DIMENSION, "test_pp_is_valid_define_vector_line");
+
+	// some errors with binary primitive/macro operations on a vector and scalar variable
+	assert_equal_int(p.is_valid_define_vector_line("define_vector p = pow x foo"), VAR_REFERENCED_BEFORE_DEFINED, "test_pp_is_valid_define_vector_line");
+	p.expand_line("declare intvar bar", write_scratch_file);
+	assert_equal_int(p.is_valid_define_vector_line("define_vector a = add x bar"), VAR_REFERENCED_BEFORE_DEFINED, "test_pp_is_valid_define_vector_line");
+	
+	// some successful vector definitions as binary primitive/macro operations
+	assert_equal_int(p.is_valid_define_vector_line("define_vector p = mul x w"), 0, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector p = my_binary_macro w x"), 0, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector a = add x m"), 0, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector p = my_binary_macro w m"), 0, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector p = pow x 2"), 0, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector a = my_binary_macro w -121.2"), 0, "test_pp_is_valid_define_vector_line");
+
+
+	// some errors with unary primitive/macro definitions
+	assert_equal_int(p.is_valid_define_vector_line("define_vector p = ln x w"), INVALID_LINE, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector p = logistic m"), VAR_REFERENCED_BEFORE_DEFINED, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector p = my_unary_macro a"), VAR_REFERENCED_BEFORE_DEFINED, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector q = exp x"), VECTORS_OF_DIFFERENT_DIMENSION, "test_pp_is_valid_define_vector_line");
+
+	// some successful vector definitions as unary primitive/macro operations
+	assert_equal_int(p.is_valid_define_vector_line("define_vector p = exp x"), 0, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector p = logistic w"), 0, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector a = ln x"), 0, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector a = my_unary_macro w"), 0, "test_pp_is_valid_define_vector_line");
+
+	pass("test_pp_is_valid_define_vector_line");
 
 }
 
@@ -935,11 +1092,11 @@ void run_pp_tests() {
 
 	cout << "\nTesting Preprocessor Class... " << endl << endl;
 
-	test_pp_constructor();
-	test_pp_destructor();
+	test_pp_constructor_expand_destructor();
 	test_pp_expand_line();
 	test_pp_expand_declare_vector();
 	test_pp_expand_define();
+	test_pp_expand_define_vector();
 	test_pp_expand_vector_operation();
 	test_pp_expand_unary_macro();
 	test_pp_expand_binary_macro();
@@ -955,6 +1112,7 @@ void run_pp_tests() {
 	test_pp_parse_macro_subsequent_line();
 	test_pp_is_valid_declare_line();
 	test_pp_is_valid_define_line();
+	test_pp_is_valid_define_vector_line();
 	test_pp_is_valid_declare_vector_line();
 
 	cout << "\nAll Preprocessor Tests Passed." << endl << endl;

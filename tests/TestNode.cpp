@@ -11,6 +11,13 @@ void test_node_constructor() {
 	assert_equal_int(n.get_num_children(), 0, "test_node_constructor");
 	assert_equal_int(n.get_mark(), 0, "test_node_constructor");
 	assert_true(n.get_type() == VariableType::INVALID_VAR_TYPE, "Initial var type should be invalid", "test_node_constructor");
+	assert_true(n.get_operation() == OperationType::INVALID_OPERATION, "Initial operation type should be invalid", "test_node_constructor");
+	assert_equal_int(n.get_parents()->size(), 0, "test_node_constructor");
+	assert_true(n.get_child_one() == NULL, "Child one should be NULL initially", "test_node_constructor");
+	assert_true(n.get_child_two() == NULL, "Child two should be NULL initially", "test_node_constructor");
+	assert_equal_string(n.get_child_one_name(), "", "test_node_constructor");
+	assert_equal_string(n.get_child_two_name(), "", "test_node_constructor");
+	assert_false(n.is_constant(), "Node should not be constant", "test_node_constructor");
 
 	// create constant node
 	Node const_node("-7.3", true);
@@ -19,6 +26,12 @@ void test_node_constructor() {
 	assert_true(const_node.get_type() == VariableType::CONSTANT, "node variable type should be constant", "test_node_constructor");
 	assert_equal_int(const_node.get_num_children(), 0, "test_node_constructor");
 	assert_equal_int(const_node.get_mark(), 0, "test_node_constructor");
+	assert_true(n.get_operation() == OperationType::INVALID_OPERATION, "Initial operation type should be invalid", "test_node_constructor");
+	assert_equal_int(n.get_parents()->size(), 0, "test_node_constructor");
+	assert_true(n.get_child_one() == NULL, "Child one should be NULL initially", "test_node_constructor");
+	assert_true(n.get_child_two() == NULL, "Child two should be NULL initially", "test_node_constructor");
+	assert_equal_string(n.get_child_one_name(), "", "test_node_constructor");
+	assert_equal_string(n.get_child_two_name(), "", "test_node_constructor");
 
 	pass("test_node_constructor");
 
@@ -32,8 +45,8 @@ void test_node_destructor() {
 	Node *sc = new Node("17", true);
 	n->set_child(fc);
 	n->set_child(sc);
-	fc->set_parent(n);
-	sc->set_parent(n);
+	fc->add_parent(n);
+	sc->add_parent(n);
 	delete n;
 	delete fc;
 	pass("test_node_destructor");
@@ -111,41 +124,56 @@ void test_node_operation() {
 
 void test_node_parent() {
 
-	// test parent is initially null
+	// test node has no parents initially
 	Node a("a", false);
-	assert_true(a.get_parent() == NULL, "A's initial parent should be NULL", "test_node_parent");
+	assert_equal_int(a.get_parents()->size(), 0, "test_node_parent");
 
 	// test adding null parent doesn't work
-	assert_false(a.set_parent(NULL), "Shouldn't be able to set a NULL parent", "test_node_parent");
+	assert_false(a.add_parent(NULL), "Shouldn't be able to set a NULL parent", "test_node_parent");
 	
 	// test adding constant parent doesn't work
 	Node *x = new Node("0", true);
-	assert_false(a.set_parent(x), "shouldn't be able to set a constant parent", "test_node_parent");
+	assert_false(a.add_parent(x), "shouldn't be able to set a constant parent", "test_node_parent");
 	
 	// test adding input/weight/exp_output parent doesn't work
 	Node *y = new Node("y", false);
 	y->set_type(VariableType::INPUT);
-	assert_false(a.set_parent(y), "shouldn't be able to set an input/weight/exp_output parent", "test_node_parent");
+	assert_false(a.add_parent(y), "shouldn't be able to set an input/weight/exp_output parent", "test_node_parent");
 	y->set_type(VariableType::WEIGHT);
-	assert_false(a.set_parent(y), "shouldn't be able to set an input/weight/exp_output parent", "test_node_parent");
+	assert_false(a.add_parent(y), "shouldn't be able to set an input/weight/exp_output parent", "test_node_parent");
 	y->set_type(VariableType::EXP_OUTPUT);
-	assert_false(a.set_parent(y), "shouldn't be able to set an input/weight/exp_output parent", "test_node_parent");
+	assert_false(a.add_parent(y), "shouldn't be able to set an input/weight/exp_output parent", "test_node_parent");
 
 	// test basic add parent works
-	Node *parent = new Node("parent", false);
-	assert_true(a.set_parent(parent), "Should be able to set parent", "test_node_parent");
-	assert_equal_string(a.get_parent_name(), "parent", "test_node_parent");
-	assert_true(a.get_parent() == parent, "A's parent should be the PARENT node.", "test_node_parent");
+	Node *parent1 = new Node("parent1", false), *parent2 = new Node("parent2", false);
+	assert_true(a.add_parent(parent1), "Should be able to set parent1", "test_node_parent");
+	assert_equal_int(a.get_parents()->size(), 1, "test_node_parent");
+	assert_equal_int(a.get_parent_names()->size(), 1, "test_node_parent");
+	assert_true(a.add_parent(parent2), "Should be able to set parent2", "test_node_parent");
+	assert_equal_int(a.get_parent_names()->size(), 2, "test_node_parent");
+
+	set<Node *> *parents = a.get_parents();
+	set<string> *parent_names = a.get_parent_names();
+	set<string> expected_parents = {"parent1", "parent2"};
+	for (set<Node *>::iterator it = parents->begin(); it != parents->end(); ++it) {
+		Node *p = *it;
+		assert_true(expected_parents.count(p->get_name()) == 1, "parent should be found", "test_node_parent");
+	}
+	for (set<string>::iterator it = parent_names->begin(); it != parent_names->end(); ++it) {
+		assert_true(expected_parents.count(*it) == 1, "parent name should be found", "test_node_parent");
+	}
+
 
 	// test loss nodes cannot have non-loss parents
-	a.set_type(VariableType::LOSS);
+	Node loss("loss", false);
+	loss.set_type(VariableType::LOSS);
 	Node *z = new Node("z", false);
-	assert_false(a.set_parent(z), "Loss nodes cannot have parents", "test_node_parent");
+	assert_false(loss.add_parent(z), "Loss nodes cannot have parents", "test_node_parent");
 
 	// test loss node can have themselves set as their parents
-	assert_true(a.set_parent(&a), "Loss nodes' parents must be themselves", "test_node_parent");
+	assert_true(loss.add_parent(&loss), "Loss nodes' parents must be themselves", "test_node_parent");
 
-	delete x; delete y; delete z; delete parent;
+	delete x; delete y; delete z; delete parent1; delete parent2;
 	pass("test_node_parent");
 
 }

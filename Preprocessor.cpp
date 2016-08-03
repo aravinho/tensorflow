@@ -3,7 +3,6 @@
 #include <string>
 #include <stdio.h>
 
-#include "utilities.h"
 #include "Preprocessor.h"
 
 
@@ -35,6 +34,8 @@ Preprocessor::~Preprocessor() {
     }
     delete macros;
 }
+
+
 /* ------------------------------- Main Methods ---------------------------- */
 
 int Preprocessor::expand_program(const string& prog_filename, const string& expanded_prog_filename) {
@@ -155,6 +156,23 @@ int Preprocessor::expand_line(const string& prog_line, ofstream& exp_prog) {
         string var_name = tokens->at(1);
         defined_variables->insert(var_name);
         return num_lines;
+
+    }
+
+    if (inst_type == InstructionType::DEFINE_VECTOR) {
+
+        // verify the line is a valid DEFINE instruction
+        int valid_define_vector_line = is_valid_define_vector_line(prog_line);
+        if (valid_define_vector_line < 0) return valid_define_vector_line;
+
+        // expand the line
+        int num_lines = expand_define_vector_instruction(prog_line, exp_prog);
+        if (num_lines < 0) return num_lines;
+
+        // mark this variable as defined
+        string var_name = tokens->at(1);
+        defined_variables->insert(var_name);
+        return num_lines;
     }
     
     if (inst_type == InstructionType::DECLARE_VECTOR) {
@@ -224,12 +242,11 @@ int Preprocessor::expand_define_instruction(const string& line, ofstream &exp_pr
 
     string var_name = tokens->at(1), operation = tokens->at(3);
 
-    if (is_valid_vector_operation(operation)) {
-        OperationType vec_oper = get_operation_type(operation);
+    if (is_dot_product(operation)) {
         string operand1 = tokens->at(4);
         string operand2 = tokens->at(5);
-        return expand_vector_operation(vec_oper, var_name, operand1, operand2, exp_prog);
-
+        int dimension = vector_dimensions->at(operand1);
+        return expand_dot_product_instruction(var_name, operand1, operand2, dimension, exp_prog);
     }
 
     else if (is_valid_macro(operation)) {
@@ -253,6 +270,82 @@ int Preprocessor::expand_define_instruction(const string& line, ofstream &exp_pr
     return INVALID_LINE;
 
 }
+
+int Preprocessor::expand_define_vector_instruction(const string& line, ofstream &exp_prog) {
+
+    if (line.compare("") == 0) return 0;
+
+    // tokenize the line
+    vector<string> *tokens = new vector<string>();
+    int num_tokens = tokenize_line(line, tokens, " ");
+    if (num_tokens < 4 || num_tokens > 6) return INVALID_LINE;
+
+    string var_name = tokens->at(1), operation = tokens->at(3);
+    string operand1 = tokens->at(4);
+    string operand2 = "";
+
+    // determine whether the operation is a primitive or a macro
+    bool operation_is_primitive = is_valid_primitive(operation);
+    bool operation_is_macro = is_valid_macro(operation);
+    if (!operation_is_primitive && !operation_is_macro) return INVALID_LINE;
+
+    // determine whether the operation requires 1 vector, a vector and a scalar, or 2 vectors
+    bool unary_vector_operation = true;
+    bool vector_scalar_operation = false;
+    bool binary_vector_operation = false;
+
+    if (num_tokens == 6) {
+        unary_vector_operation = false;
+        operand2 = tokens->at(5);
+
+        if (vector_dimensions->count(operand2) > 0) {
+            binary_vector_operation = true;
+        } else {
+            vector_scalar_operation = true;
+        }
+    }
+
+    // determine the dimensions we are working with
+    int dimension = vector_dimensions->at(operand1);
+
+    // expand into component instructions
+    for (int i = 0; i < dimension; i++) {
+
+        string operand1_component = operand1 + "." + to_string(i);
+        string operand2_component = operand2 + "." + to_string(i);
+        string result_component = var_name + "." + to_string(i);
+
+        if (unary_vector_operation) {
+            if (operation_is_primitive) {
+                exp_prog << "define " << result_component << " = " << operation << " " << operand1_component << endl;
+            } else if (operation_is_macro) {
+                expand_unary_macro(operation, operand1_component, result_component, exp_prog);
+            }
+        }
+
+        else if (vector_scalar_operation) {
+            if (operation_is_primitive) {
+                exp_prog << "define " << result_component << " = " << operation << " " <<
+                operand1_component << " " << operand2 << endl;
+            } else if (operation_is_macro) {
+                expand_binary_macro(operation, operand1_component, operand2, result_component, exp_prog);
+            }
+        }
+
+        else if (binary_vector_operation) {
+            if (operation_is_primitive) {
+                exp_prog << "define " << result_component << " = " << operation << " " <<
+                operand1_component << " " << operand2_component << endl;
+            } else if (operation_is_macro) {
+                expand_binary_macro(operation, operand1_component, operand2_component, result_component, exp_prog);
+            }
+        }
+    }
+
+    return dimension;
+
+}
+
 
 
 int Preprocessor::expand_vector_operation(const OperationType& oper_type, const string& result, const string& operand1, const string& operand2,
@@ -346,8 +439,11 @@ string Preprocessor::substitute_dummy_names(const string& dummy_line, string dum
         }
 
         // if the token is one of the intvars used in the macro
+        // give it a unique name
+        // if the macro defines c, and this token is an intvar p, and this is the 0th reference to this macro:
+        // the line becomes "declare intvar c_p0"
         else if (!is_keyword(token) && !is_constant(token)) {
-            modified_line.append(token + to_string(macro_num_references));
+            modified_line.append(result + "_" + token + to_string(macro_num_references));
         }
         else {
             modified_line.append(token);
@@ -640,8 +736,6 @@ int Preprocessor::is_valid_define_line(const string& line) {
     VariableType var_type;
     if (variables->count(second_token) != 0) {
         var_type = variables->at(second_token);
-    } else if (vectors->count(second_token) != 0) {
-        var_type = vectors->at(second_token);
     } else {
         return VAR_DEFINED_BEFORE_DECLARED;
     }
@@ -700,54 +794,27 @@ int Preprocessor::is_valid_define_line(const string& line) {
 
     }
 
+    // a variable could be defined as the dot product of two previously defined vectors
+    if (is_dot_product(fourth_token)) {
 
-    // a variable could be defined as an operation of 2 vectors, a vector and a variable, or a vector and a constant
-    if (is_valid_vector_operation(fourth_token)) {
         // the variable being defined must have been declared, but cannot have been defined
-        // if the operation is a dot product, the result variable must be a scalar, not a vector
-        if (get_operation_type(fourth_token) == OperationType::DOT) {
-            if (variables->count(second_token) == 0) return VAR_DEFINED_BEFORE_DECLARED;
-            if (defined_variables->count(second_token) != 0) return VAR_DEFINED_TWICE;
-            if (vectors->count(second_token) != 0) return INVALID_LINE;
-        } else {
-            if (vectors->count(second_token) == 0) return VAR_DEFINED_BEFORE_DECLARED;
-            if (defined_variables->count(second_token) != 0) return VAR_DEFINED_TWICE;
-        }
+        // the result variable must be a scalar, not a vector
+        if (variables->count(second_token) == 0) return VAR_DEFINED_BEFORE_DECLARED;
+        if (defined_variables->count(second_token) != 0) return VAR_DEFINED_TWICE;
+        if (vectors->count(second_token) != 0) return INVALID_LINE;
 
-        // both the operands must have been declared and defined, and must be of the same dimension
-        // for non-dot product, operations, the operands must also be of the same dimension as the result
-        if (is_binary_vector_operation(fourth_token)) {
-            
-            if (num_tokens != 6) return INVALID_LINE;
-            
-            string fifth_token = tokens->at(4), sixth_token = tokens->at(5);
+        if (num_tokens != 6) return INVALID_LINE;
+        string fifth_token = tokens->at(4), sixth_token = tokens->at(5);
 
-            if (vectors->count(fifth_token) == 0 || defined_variables->count(fifth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
-            if (vectors->count(sixth_token) == 0 || defined_variables->count(fifth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
-        
-            if (vector_dimensions->at(fifth_token) != vector_dimensions->at(sixth_token)) return VECTORS_OF_DIFFERENT_DIMENSION;
-            if (get_operation_type(fourth_token) != OperationType::DOT && vector_dimensions->at(fifth_token) != vector_dimensions->at(second_token))
-                return VECTORS_OF_DIFFERENT_DIMENSION; 
+        // both the operand vectors must have been defined
+        if (vectors->count(fifth_token) == 0 || defined_variables->count(fifth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
+        if (vectors->count(sixth_token) == 0 || defined_variables->count(fifth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
+    
+        // both the operand vectors must be of the same dimension
+        if (vector_dimensions->at(fifth_token) != vector_dimensions->at(sixth_token)) return VECTORS_OF_DIFFERENT_DIMENSION;
 
-            return 0;
-
-        }        
-
-        else if (is_unary_vector_operation(fourth_token)) {
-
-            if (num_tokens != 6) return INVALID_LINE;
-
-            string fifth_token = tokens->at(4), sixth_token = tokens->at(5);
-
-            if (vectors->count(fifth_token) == 0 || defined_variables->count(fifth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
-            if (vector_dimensions->at(fifth_token) != vector_dimensions->at(second_token)) return VECTORS_OF_DIFFERENT_DIMENSION;
-            if (!is_constant(sixth_token)) {
-                if (defined_variables->count(sixth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
-            }
-            return 0;
-            
-        }
-
+        return 0;
+                  
     }
 
 
@@ -770,119 +837,107 @@ int Preprocessor::is_valid_define_line(const string& line) {
 }
 
 
+int Preprocessor::is_valid_define_vector_line(const string& line) {
+
+    if (line.compare("") == 0) return OTHER_ERROR;
+
+    vector<string> *tokens = new vector<string>();
+    int num_tokens = tokenize_line(line, tokens, " ");
+    if (num_tokens < 5 || num_tokens > 6) return INVALID_LINE;
+
+    string first_token = tokens->at(0);
+    string second_token = tokens->at(1);
+    string third_token = tokens->at(2);
+
+    // every define instruction resembles "define <vec_name> = ..."
+    if (first_token.compare("define_vector") != 0 || !is_valid_var_name(second_token) || third_token.compare("=") != 0)
+        return INVALID_LINE;
+
+    // the vector being defined must have been previously declared
+    VariableType vec_type;
+    if (vectors->count(second_token) != 0) {
+        vec_type = vectors->at(second_token);
+    } else {
+        return VAR_DEFINED_BEFORE_DECLARED;
+    }
+
+    // input, weight and expected output vectors cannot be defined
+    if (vec_type == VariableType::INPUT || vec_type == VariableType::WEIGHT || vec_type == VariableType::EXP_OUTPUT)
+        return CANNOT_DEFINE_I_W_EO;
+
+    // vectors that have previously been defined cannot be redefined
+    if (defined_variables->count(second_token) != 0) return VAR_DEFINED_TWICE;
+
+
+    string fourth_token = tokens->at(3);
+
+    // a vector could be defined as a binary primitive/macro operation on:
+    // two vectors ("define_vector z = add x y", where z, x and y are vectors)
+    // a vector and a scalar variable ("define_vector z = my_macro x q", where z and x are vectors, q is a scalar, and my_macro is a binary macro)
+    // a vector and a constant ("define vector_z = pow x 3")
+    if (is_binary_primitive(fourth_token) || is_binary_macro(fourth_token)) {
+
+        if (num_tokens != 6) return INVALID_LINE;
+
+        string fifth_token = tokens->at(4);
+        string sixth_token = tokens->at(5);
+
+        // the first operand must be a defined vector and must be of the same dimension as the result vector
+        if (vectors->count(fifth_token) == 0 || defined_variables->count(fifth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED; 
+        if (vector_dimensions->at(fifth_token) != vector_dimensions->at(second_token)) return VECTORS_OF_DIFFERENT_DIMENSION;
+
+        // the second operand must either be a defined vector, a defined scalar variable, or a constant
+
+        // if second operand is a vector, it must have been defined, and be of the same dimension as the result and first operand vectors
+        if (vectors->count(sixth_token) != 0) {
+            if (defined_variables->count(sixth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
+            if (vector_dimensions->at(fifth_token) != vector_dimensions->at(sixth_token)) return VECTORS_OF_DIFFERENT_DIMENSION;
+            return 0;
+        }
+
+        // if the second operand is a constant, return 0
+        else if (is_constant(sixth_token)) {
+            return 0;
+        }
+
+        // if the second operand is not a vector or a constant,
+        // make sure it is a variable, and has been defined
+        else if (is_valid_var_name(sixth_token)) {
+            if (variables->count(sixth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
+            if (defined_variables->count(sixth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED;
+            return 0;
+        }
+
+        else {
+            return INVALID_LINE;
+        }
+    }
+
+
+    // a vector could be defined as a unary primitive/macro operation on one vector:
+    // ("define_vector z = logistic x", where z and x are vectors)
+    // ("define_vector z = my_unary_macro x", where z and x are vectors, and my_unary_macro is a unary macro)
+    if (is_unary_primitive(fourth_token) || is_unary_macro(fourth_token)) {
+
+        if (num_tokens != 5) return INVALID_LINE;
+        string fifth_token = tokens->at(4);
+
+        // the first operand must be a defined vector and must be of the same dimension as the result vector
+        if (vectors->count(fifth_token) == 0 || defined_variables->count(fifth_token) == 0) return VAR_REFERENCED_BEFORE_DEFINED; 
+        if (vector_dimensions->at(fifth_token) != vector_dimensions->at(second_token)) return VECTORS_OF_DIFFERENT_DIMENSION;
+
+        return 0;
+
+    }
+
+    return INVALID_LINE;
+
+}
+
+
 bool Preprocessor::is_valid_macro(const string& name) {
     return macros->count(name) > 0;
 }
-
-
-
-
-
-
-
-void test_expand(char line[], Preprocessor *p) {
-    /*vector<string> *expanded_prog_lines = new vector<string> ();
-    int num_lines = p->expand_line(expanded_prog_lines, line);
-    for (int i = 0; i < num_lines; i++) cout << expanded_prog_lines->at(i) << endl;*/
-}
-
-
-/* IF A MACRO IS CALLED TWICE IN A PROGRAM, LALA WILL BE DECLARED TWICE, IT WON'T WORK THE SECOND TIME */
-void test_expand_macro() {
-    char a[1000], b[1000], c[1000], d[1000], e[1000], f[1000], g[1000];
-    strcpy(a, "#macro res = my_macro opone optwo; declare intvar lala; define lala = logistic opone; declare intvar q; define q = pow lala 3; define res = mul optwo q");
-    strcpy(b, "declare input a");
-    strcpy(c, "declare weight b");
-    strcpy(d, "declare output c");
-    strcpy(e, "define c = my_macro a b");
-    strcpy(f, "declare intvar g");
-    strcpy(g, "define g = my_macro a b");
-    Preprocessor *p = new Preprocessor();
-    test_expand(a, p);
-    test_expand(b, p);
-    test_expand(c, p);
-    test_expand(d, p);
-    test_expand(e, p);
-    test_expand(f, p);
-    test_expand(g, p);
-}
-
-void test_expand_dot_product() {
-    char a[1000], b[1000], c[1000], d[1000];
-    strcpy(a, "declare_vector intvar z 3");
-    strcpy(b, "declare_vector input a 3");
-    strcpy(c, "declare output b");
-    strcpy(d, "define b = dot z a");
-    Preprocessor *p = new Preprocessor();
-    test_expand(a, p);
-    test_expand(b, p);
-    test_expand(c, p);
-    test_expand(d, p);
-}
-
-void test_expand_primitive_define() {
-    char a[1000], b[1000], c[1000], d[1000];
-    strcpy(a, "declare intvar z");
-    strcpy(b, "declare input a");
-    strcpy(c, "declare weight b");
-    strcpy(d, "define z = logistic b");
-    Preprocessor *p = new Preprocessor();
-    test_expand(a, p);
-    test_expand(b, p);
-    test_expand(c, p);
-    test_expand(d, p);
-}
-
-
-void test_expand_declare() {
-    char a[1000], b[1000];
-    strcpy(a, "declare exp_output eo");
-    strcpy(b, "declare_vector weight w 5");
-    Preprocessor *p = new Preprocessor ();
-    test_expand(a, p);
-    test_expand(b, p);
-}
-
-void test_macro_parsing_helper(char macro_line[]) {
-    struct macro macro;
-
-    Preprocessor p;
-    int success = p.parse_macro_line(macro_line, &macro);
-    if (success < 0) {
-        cerr << "error" << endl;
-        return;
-    }
-
-    cout << "macro name: " << macro.name << endl;    
-    cout << "result: " << macro.result << ", operand1: " << macro.operand1 << ", operand2: " << macro.operand2 << endl;
-    for (int i = 0; i < macro.num_lines; i++) {
-        cout << macro.lines->at(i) << endl;
-    }
-
-
-}
-
-void test_macro_parsing() {
-    char a[1000], b[1000], c[1000], d[1000];
-    strcpy(a, "#macro res = my_macro opone optwo; declare intvar lala; define lala = logistic opone; declare intvar q; define q = pow lala 3; define c = mul optwo q");
-    //test_macro_parsing_helper(a);
-
-    strcpy(b, "#macro res = my_macro a b; declare intvar z; define z = 3; define a = add b 1");
-    test_macro_parsing_helper(b);
-
-    strcpy(c, "#macro res = my_macro a b; res = mul a b");
-    //test_macro_parsing_helper(c);
-
-    strcpy(d, "define res = my_macro a b; declare intvar q; define res = add q p;");
-    //test_macro_parsing_helper(d);
-}
-
-
-/*int main(int argc, char *argv[]) {
-    //test_macro_parsing();
-    test_expand_macro();
-    return 0;
-}*/
 
 
 

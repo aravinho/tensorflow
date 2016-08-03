@@ -47,6 +47,7 @@ enum class InstructionType {
     DECLARE,
     DECLARE_VECTOR,
     DEFINE,
+    DEFINE_VECTOR,
     MACRO,
     INVALID_INST
 };
@@ -109,12 +110,19 @@ bool is_int(const string& name);
  */
 bool is_valid_file_name(const string& filename);
 
-/* Returns true if the given name is a valid variable name, and false otherwise.
+/* Returns true if the given name is a valid user-defined variable name, and false otherwise.
  * Empty strings are invalid names.
  * Strings with numerals are invalid names.
  * Names that match a valid instruction, variable or operation type are invalid.
  */
 bool is_valid_var_name(const string& name);
+
+/* Returns true if the given name is a valid variable that the Compiler/Interpreter can handle.
+ * Empty strings or keywords are invalid names.
+ * Unlike user-defined variable names, expanded variable names can contain numerals.
+ * For example, vector components or expanded macro intvars will have numerals.
+ */
+bool is_valid_expanded_var_name(const string& name);
 
 /* Returns true if the given name is a valid operation and false otherwise. */
 bool is_valid_operation(const string& oper_name);
@@ -139,6 +147,10 @@ bool is_binary_vector_operation(const string& name);
 
 /* Returns true if the given name is a unary vector operation, and false otherwise. */
 bool is_unary_vector_operation(const string& name);
+
+/* Returns true if the given name is the dot product operation, and false otherwise. */
+bool is_dot_product(const string& name);
+
 
 /* Returns true if the given size is a positive integer less than or equal to MAX_VECTOR_SIZE.
  * Returns false otherwise.

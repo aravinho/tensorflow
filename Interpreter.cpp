@@ -11,11 +11,18 @@
 using namespace std;
 
 
-/* ---------------- Constructor --------------- */
+/* ---------------- Constructor/Destructor --------------- */
 
 Interpreter::Interpreter() {
 	var_types = new unordered_map<string, VariableType> ();
+    bindings = new BindingsDictionary();
 
+}
+
+
+Interpreter::~Interpreter() {
+    delete var_types;
+    delete bindings;
 }
 
 
@@ -42,43 +49,24 @@ int Interpreter::interpret(const string& filename, const unordered_map<string, f
     {
         getline(prog, line);
         parse_success = parse_line(line, inputs);
-        cout << "line: " << line << endl;
         if (parse_success != 0) {
             cerr << "Invalid line: " << line << endl;
             return parse_success;
         }
     }
 
-    cout << endl << endl;
-
     prog.close();
 
 
     // accumulate outputs
-    for (unordered_map<string, float>::iterator it = bindings.bindings->begin(); it != bindings.bindings->end(); ++it) {
-    	
-        string var_name = it->first;
-    	float value = it->second;
-    	cout << "var: " << var_name << ", val: " << value << endl;
-
-    	if (var_types->count(var_name) != 0) {
-    		if ((*var_types)[var_name] == VariableType::OUTPUT) {
-    			cout << "********output: " << var_name << ", val: " << value << endl;
-    			outputs->insert(make_pair(var_name, value));
-    		}
-    	}
-
-
-    }
-    
-
+    accumulate_outputs(outputs);
 	return 0;
 }
 
 
 int Interpreter::parse_line(const string& line, const unordered_map<string, float>& inputs) {
 	
-    if (line.compare("") == 0) return 0;
+    if (line == "") return 0;
 
     // tokenize the line
     vector<string> *tokens = new vector<string>();
@@ -108,20 +96,24 @@ int Interpreter::parse_line(const string& line, const unordered_map<string, floa
 
         // grab the variable name
         var_name = tokens->at(2);
-        if (!is_valid_var_name(var_name)) return INVALID_VAR_NAME;
+        if (!is_valid_expanded_var_name(var_name)) return INVALID_VAR_NAME;
 
 
         // add name to Bindings Dictionary
-        success = bindings.add_variable(var_name);
-        if (success == -1) return VAR_DECLARED_TWICE;
+        success = bindings->add_variable(var_name);
+        if (success == -1) {
+            return VAR_DECLARED_TWICE;
+        }
 
         // record the type of this variable
         (*var_types)[var_name] = var_type;
 
         // if input or weight, bind the name to its value
         if (var_type == VariableType::INPUT || var_type == VariableType::WEIGHT || var_type == VariableType::EXP_OUTPUT) {
-        	if (inputs.count(var_name) == 0) return INPUT_VALUE_NOT_PROVIDED;
-        	success = bindings.bind_value(var_name, inputs.at(var_name));
+        	if (inputs.count(var_name) == 0) {
+                return INPUT_VALUE_NOT_PROVIDED;
+            }
+        	success = bindings->bind_value(var_name, inputs.at(var_name));
         	if (success == -1) return OTHER_ERROR;
 
         }
@@ -141,22 +133,22 @@ int Interpreter::parse_line(const string& line, const unordered_map<string, floa
 
     	// grab the variable name, make sure it exists, and hasn't already been defined
         var_name = tokens->at(1);
-        if (!is_valid_var_name(var_name)) return INVALID_VAR_NAME;
-        if (!bindings.has_been_declared(var_name)) return VAR_DEFINED_BEFORE_DECLARED;
-        if (bindings.has_been_defined(var_name)) return VAR_DEFINED_TWICE;
+        if (!is_valid_expanded_var_name(var_name)) return INVALID_VAR_NAME;
+        if (!bindings->has_been_declared(var_name)) return VAR_DEFINED_BEFORE_DECLARED;
+        if (bindings->has_been_defined(var_name)) return VAR_DEFINED_TWICE;
 
 
         // The variable might be defined in one of three ways:
         // 1. As a constant
         // 2. As equivalent to the value another variable
-        // 3. As a binary operation of two variables/constants
+        // 3. As an operation of one or two variables/constants
 
 
         // If the variable is defined as a constant, bind this constant value to the name
         if (is_constant(tokens->at(3))) {
             if (num_tokens != 4) return INVALID_LINE;
         	float constant_value = stof(tokens->at(3), NULL);
-        	success = bindings.bind_value(var_name, constant_value);
+        	success = bindings->bind_value(var_name, constant_value);
         	return success;
         }
 
@@ -172,10 +164,10 @@ int Interpreter::parse_line(const string& line, const unordered_map<string, floa
         	if (num_tokens != 4) return INVALID_LINE;
 
         	string equiv_var(tokens->at(3));
-        	if (!bindings.has_been_defined(equiv_var)) return VAR_REFERENCED_BEFORE_DEFINED;
+        	if (!bindings->has_been_defined(equiv_var)) return VAR_REFERENCED_BEFORE_DEFINED;
         
-        	float equiv_var_value = bindings.get_value(equiv_var);
-        	success = bindings.bind_value(var_name, equiv_var_value);
+        	float equiv_var_value = bindings->get_value(equiv_var);
+        	success = bindings->bind_value(var_name, equiv_var_value);
             return success;
         }
 
@@ -193,21 +185,20 @@ int Interpreter::parse_line(const string& line, const unordered_map<string, floa
         	if (is_constant(tokens->at(4))) {
         		operand1 = stof(tokens->at(4), NULL);
         	} else {
-        		if (!bindings.has_been_defined(tokens->at(4))) return VAR_REFERENCED_BEFORE_DEFINED;
-        		operand1 = bindings.get_value(string(tokens->at(4)));
+        		if (!bindings->has_been_defined(tokens->at(4))) return VAR_REFERENCED_BEFORE_DEFINED;
+        		operand1 = bindings->get_value(string(tokens->at(4)));
 
         	}
 
         	if (is_constant(tokens->at(5))) {
         		operand2 = stof(tokens->at(5), NULL);
         	} else {
-        		if (!bindings.has_been_defined(tokens->at(5))) return VAR_REFERENCED_BEFORE_DEFINED;
-        		operand2 = bindings.get_value(string(tokens->at(5)));
+        		if (!bindings->has_been_defined(tokens->at(5))) return VAR_REFERENCED_BEFORE_DEFINED;
+        		operand2 = bindings->get_value(string(tokens->at(5)));
         	}
 
-
         	float new_var_value = apply_binary_operation(operation, operand1, operand2);
-        	success = bindings.bind_value(var_name, new_var_value);
+        	success = bindings->bind_value(var_name, new_var_value);
             return success;
         }
 
@@ -220,13 +211,13 @@ int Interpreter::parse_line(const string& line, const unordered_map<string, floa
             if (is_constant(tokens->at(4))) {
                 operand1 = stof(tokens->at(4), NULL);
             } else {
-                if (!bindings.has_been_defined(tokens->at(4))) return VAR_REFERENCED_BEFORE_DEFINED;
-                operand1 = bindings.get_value(tokens->at(4));
+                if (!bindings->has_been_defined(tokens->at(4))) return VAR_REFERENCED_BEFORE_DEFINED;
+                operand1 = bindings->get_value(tokens->at(4));
 
             }
         	
         	float new_var_value = apply_unary_operation(operation, operand1);
-        	success = bindings.bind_value(var_name, new_var_value);
+        	success = bindings->bind_value(var_name, new_var_value);
             return success;
         
     	}
@@ -239,11 +230,11 @@ int Interpreter::parse_line(const string& line, const unordered_map<string, floa
 }
 
 
-
-
 /* ---------------------------------- Helper Functions ------------------------- */
 
 float apply_binary_operation(OperationType operation, float operand1, float operand2) {
+
+    float result = FLT_MIN;
 
 	if (operation == OperationType::INVALID_OPERATION) {
 		return FLT_MIN;
@@ -258,11 +249,11 @@ float apply_binary_operation(OperationType operation, float operand1, float oper
 	}
 
 	if (operation == OperationType::ADD) {
-		return operand1 + operand2;
+		result = operand1 + operand2;
 	}
 
 	if (operation == OperationType::MUL) {
-		return operand1 * operand2;
+		result = operand1 * operand2;
 	}
 
     if (operation == OperationType::POW) {
@@ -270,15 +261,16 @@ float apply_binary_operation(OperationType operation, float operand1, float oper
             cerr << "Divide by zero error." << endl;
             return FLT_MIN;
         }
-        return pow(operand1, operand2);
-    }
+        result = pow(operand1, operand2);
+    } 
 
-
-	return FLT_MIN;
+	return isnan(result) || result == FLT_MIN ? FLT_MIN : result;
 }
 
 
 float apply_unary_operation(OperationType operation, float operand) {
+
+    float result = FLT_MIN;
 
     if (operation == OperationType::INVALID_OPERATION) {
         return FLT_MIN;
@@ -293,16 +285,47 @@ float apply_unary_operation(OperationType operation, float operand) {
     }
 
     if (operation == OperationType::LOGISTIC) {
-        return 1 / (1 + exp(-1 * operand));
+        result = 1 / (1 + exp(-1 * operand));
     }
 
     if (operation == OperationType::EXP) {
-        return exp(operand);
+        result = exp(operand);
     }
 
     if (operation == OperationType::LN) {
-        return log(operand);
+        if (operand <= 0) {
+            cerr << "Cannot take the log of a non-positive number." << endl;
+            return FLT_MIN;
+        }
+        result = log(operand);
     }
 
-    return FLT_MIN;
+    return isnan(result) || result == FLT_MIN ? FLT_MIN: result;
+}
+
+void Interpreter::accumulate_outputs(unordered_map<string, float> *outputs) {
+
+    for (unordered_map<string, float>::iterator it = bindings->bindings->begin(); it != bindings->bindings->end(); ++it) {
+        
+        string var_name = it->first;
+        float value = it->second;
+
+        if (var_types->count(var_name) != 0) {
+            if ((*var_types)[var_name] == VariableType::OUTPUT) {
+                outputs->insert(make_pair(var_name, value));
+            }
+        }
+
+    }
+    
+}
+
+
+BindingsDictionary *Interpreter::get_bindings_dictionary() {
+    return this->bindings;
+}
+
+
+unordered_map<string, VariableType> *Interpreter::get_var_types() {
+    return this->var_types;
 }

@@ -14,8 +14,8 @@ Node::Node() {
 	type = VariableType::INVALID_VAR_TYPE;
 	operation = OperationType::INVALID_OPERATION;
 
-    parent_name = "";
-    parent = NULL;
+    parents = new set<Node *>();
+    parent_names = new set<string>();
 
     child_one_name = "";
     child_two_name = "";
@@ -74,13 +74,17 @@ void Node::set_operation(OperationType new_operation) {
 
 /* ----------- Parent Methods --------------- */
 
-string Node::get_parent_name() const {
-	return parent_name;
+
+set<Node *> *Node::get_parents() const {
+	return parents;
 }
-Node *Node::get_parent() const {
-	return parent;
+set<string> *Node::get_parent_names() const {
+	return parent_names;
 }
-bool Node::set_parent(Node *new_parent) {
+bool Node::has_parent() const {
+	return parents->size() > 0;
+}
+bool Node::add_parent(Node *new_parent) {
 	if (new_parent == NULL || new_parent->is_constant()) return false;
 	if (new_parent->get_type() == VariableType::INPUT
 		|| new_parent->get_type() == VariableType::WEIGHT 
@@ -88,8 +92,8 @@ bool Node::set_parent(Node *new_parent) {
 	if (this->get_type() == VariableType::LOSS
 		&& new_parent != this) return false;
 
-	parent = new_parent;
-	parent_name = new_parent->get_name();
+	parents->insert(new_parent);
+	parent_names->insert(new_parent->get_name());
 	return true;
 }
 

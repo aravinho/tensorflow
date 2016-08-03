@@ -117,6 +117,7 @@ int find_partials(const string& gcp_filename, VariableVector *partials,
 const VariableVector variable_vector_union(const VariableVector& vec1, const VariableVector& vec2);
 
 /* Returns a vector. All the names in the given list var_names are bound to the value 0.
+ * Duplicates are not included: vector_of_zeros({"A", "B", "C", "B"}) == {{"A", 0}, {"B", 0}, {"C", 0}}
  */
 VariableVector vector_of_zeros(const vector<string>& var_names);
 

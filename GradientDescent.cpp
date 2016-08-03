@@ -10,7 +10,7 @@ using namespace std;
 
 
 VariableVector calculate_weights(const string& gcp_filename, const vector<string>& weight_names, const vector<string>& partial_names, const vector<pair<VariableVector, VariableVector> >& training_data) {
-
+	
 	VariableVector weights = initial_weight_guess(weight_names);
 	VariableVector gradient = avg_gradient(gcp_filename, partial_names, weights, training_data);
 	cout << "original gradient: ";

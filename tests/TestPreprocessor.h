@@ -8,11 +8,11 @@ using namespace std;
 
 /* Tests for the Preprocessor class. */
 
-void test_pp_constructor();
-void test_pp_destructor();
+void test_pp_constructor_expand_destructor();
 void test_pp_expand_line();
 void test_pp_expand_declare_vector();
 void test_pp_expand_define();
+void test_pp_expand_define_vector();
 void test_pp_expand_vector_operation();
 void test_pp_expand_unary_macro();
 void test_pp_expand_binary_macro();
@@ -29,6 +29,7 @@ void test_pp_parse_macro_first_line();
 void test_pp_parse_macro_subsequent_line();
 void test_pp_is_valid_declare_line();
 void test_pp_is_valid_define_line();
+void test_pp_is_valid_define_vector_line();
 void test_pp_is_valid_declare_vector_line();
 void test_pp_is_valid_macro();
 

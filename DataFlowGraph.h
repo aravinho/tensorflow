@@ -98,15 +98,13 @@ public:
 	void clear_all_markings();
 
 	/* Populates the given list with a sorted ordering of all the nodes in the graph.
-	 * This order is a topologically sorted order.
+	 * This order is a topologically sorted order of all the Nodes that lead to the Loss node.
 	 * This is a valid ordering to visit the nodes when computing partial derivatives.
 	 * This is the Topological Sorting Algorithm used:
 	 * 
 	 * 	top_sort(nodes):
 	 *		clear_all_markings();
-	 *		for all nodes:
-	 *			if marked(node), continue.
-	 *			if unmarked, top_sort_visit(node).
+	 *		top_sort_visit(loss_node)
 	 *
 	 *	top_sort_visit(node):
 	 *		mark temporarily

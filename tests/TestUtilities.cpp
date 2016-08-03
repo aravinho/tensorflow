@@ -40,7 +40,7 @@ void assert_equal_string(string observed, string expected, const string& test_na
 }
 
 void assert_equal_float(float observed, float expected, const string& test_name) {
-	if (observed != expected) {
+	if ((observed - expected) > FLOAT_TOLERANCE || (expected - observed) > FLOAT_TOLERANCE) {
 		cerr << test_name << " -- Observed float: " << observed << " does not equal Expected: " << expected << endl;
 		fail(test_name);
 		exit(EXIT_FAILURE);
@@ -64,6 +64,37 @@ void assert_equal_file_lines(const string& filename, const string expected_lines
 	}
 
 	file.close();
+}
+
+void assert_identical_files(const string& observed_file, const string& expected_file, const string& test_name) {
+
+	ifstream o(observed_file);
+	ifstream e(expected_file);
+
+	string o_line, e_line;
+
+	while(!o.eof()) {
+
+		if (e.eof()) {
+			cerr << "Observed file " << observed_file << " is longer than expected file " << expected_file << endl;
+			fail(test_name); 
+		}
+
+        getline(o, o_line);
+        getline(e, e_line);
+
+        assert_equal_string(o_line, e_line, test_name);
+
+    }
+
+    if (!e.eof()) {
+    	cerr << "Observed file " << observed_file << " is shorter than expected file " << expected_file << endl;
+    	fail(test_name);
+    }
+
+    o.close();
+    e.close();
+
 }
 
 void pass(const string& test_name) {

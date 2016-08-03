@@ -2,6 +2,7 @@
 #define NODE_H
 
 #include <string>
+#include <set>
 
 #include "utilities.h"
 
@@ -23,8 +24,8 @@ class Node {
     VariableType type;
     OperationType operation;
 
-    string parent_name;
-    Node *parent;
+    set<Node *> *parents;
+    set<string> *parent_names;
 
     string child_one_name, child_two_name;
     Node *child_one, *child_two;
@@ -39,13 +40,18 @@ public:
     
     /* Basic Constructor.
      * Initializes NUM_CHILDREN and MARK to 0.
+     * Initializes NAME, CHILD_ONE_NAME and CHILD_TWO_NAME to empty strings.
+     * Initializes CONSTANT_VALUE to FLT_MIN.
+     * Initializes TYPE and OPERATION to invalid.
+     * Initializes CHILD_ONE and CHILD_TWO to NULL.
+     * Initializes PARENTS AND PARENT_NAMES to an empty set.
      */
     Node();
 
     /* Constructor.
      * Creates a node with the given NAME.
      * If IS_CONSTANT is set, this node will represent a constant (a float).
-     * Initializes NUM_CHILDREN and MARK to 0.
+     * Otherwise performs the same initializations as the default constructor.
      */
     Node(string node_name, bool is_constant);
 
@@ -70,15 +76,19 @@ public:
     /* Constant nodes cannot have their operation set. */
     void set_operation(OperationType new_operation);
 
-    string get_parent_name() const;
-    Node *get_parent() const;
+    set<Node *> *get_parents() const;
+    set<string> *get_parent_names() const;
+    bool has_parent() const;
 
-    /* Returns false if the given NEW_PARENT is NULL or if NEW_PARENT is a constant node.
+    /* Adds the given NEW_PARENT to the set of parents (and its name to the set of parent names).
+     * 
+     * Returns false if the given NEW_PARENT is NULL or if NEW_PARENT is a constant node.
      * Returns false if the given NEW_PARENT is an INPUT, WEIGHT or EXP_OUTPUT node.
      * Returns false if this node is a loss node, unless NEW_PARENT is the current node.
      *  (A loss node's parent is itself).
-     * Otherwise, sets this node's parent and parent_name fields and returns true. */
-    bool set_parent(Node *new_parent);
+     *
+     * Otherwise, return true. */
+    bool add_parent(Node *new_parent);
 
 
     string get_child_one_name() const;
