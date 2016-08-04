@@ -2,10 +2,19 @@
 #include <stdlib.h>
 #include <iostream>
 #include <fstream>
+#include <time.h>
+#include <math.h>
 
 #include "TestUtilities.h"
 
+#define RANDOM_APPROX_PRECISION 0.01
+
 using namespace std;
+
+float logistic(float x) {
+	return 1 / (1 + exp(-1 * x));
+}
+
 
 void assert_equal_int(int observed, int expected, const string& test_name) {
 	if (observed != expected) {
@@ -103,4 +112,36 @@ void pass(const string& test_name) {
 
 void fail(const string& test_name) {
 	cerr << "FAIL: " << test_name << endl;
+}
+
+float generate_approximate(float val) {
+
+	//srand(time(NULL));
+	float rand_deviation = (-1 * RANDOM_APPROX_PRECISION) + static_cast <float> (rand()) / (static_cast <float> (RAND_MAX/(2 * RANDOM_APPROX_PRECISION)));
+	return val + rand_deviation;
+	
+}
+
+void assert_less_than(const float observed, const float upper_bound, const string& test_name) {
+	if (observed >= upper_bound) {
+		cerr << test_name << " -- Observed float: " << observed << " not less than: " << upper_bound << endl;
+		fail(test_name);
+		exit(EXIT_FAILURE);
+	}
+}
+
+void assert_greater_than(float observed, float lower_bound, const string& test_name) {
+	if (observed <= lower_bound) {
+		cerr << test_name << " -- Observed float: " << observed << " not greater than: " << lower_bound << endl;
+		fail(test_name);
+		exit(EXIT_FAILURE);
+	}
+}
+
+void assert_approximately_equal_float(float observed, float expected, float error_margin, const string& test_name) {
+	if ((observed - expected) > error_margin || (expected - observed) > error_margin) {
+		cerr << test_name << " -- Observed float: " << observed << " deviates from Expected: " << expected << " by more than " << error_margin << endl;
+		fail(test_name);
+		exit(EXIT_FAILURE);
+	}
 }

@@ -10,21 +10,32 @@ using namespace std;
 
 
 VariableVector calculate_weights(const string& gcp_filename, const vector<string>& weight_names, const vector<string>& partial_names, const vector<pair<VariableVector, VariableVector> >& training_data) {
-	
+
 	VariableVector weights = initial_weight_guess(weight_names);
+	cout << "original weights: ";
+	print_variable_vector(weights);
+
 	VariableVector gradient = avg_gradient(gcp_filename, partial_names, weights, training_data);
 	cout << "original gradient: ";
 	print_variable_vector(gradient);
 
-	cout << "original weights: ";
-	print_variable_vector(weights);
+	
 
 	int num_iterations = 0;
 
 	while (!approx_zero(gradient, partial_names) && num_iterations < MAX_NUM_ITERATIONS) {
+		cout << num_iterations << endl;
 		weights = increment_weight_vector(weights, scale_variable_vector(gradient, -1 * LEARNING_RATE));
+			//cout << "weights on iteration: " << num_iterations << endl;
+			//print_variable_vector(weights);
+			
+	
+	
 		gradient = avg_gradient(gcp_filename, partial_names, weights, training_data);
+		//cout << "gradient on iteration: " << num_iterations << endl;
+			//print_variable_vector(gradient);
 		num_iterations++;
+		if (gradient.size() == 0) break;
 	}
 
 	return weights;
@@ -158,9 +169,16 @@ float distance_between_variable_vectors(const VariableVector& vec1, const Variab
 
 VariableVector avg_gradient(const string& gcp_filename, const vector<string>& partial_names, const VariableVector& weights, const vector<pair<VariableVector, VariableVector> >& training_data) {
 	
+	VariableVector empty;
+	// check for trivial errors
+	if (partial_names.size() != weights.size()) return empty;
+
+	// initialize the sum_of_partials_vector
 	VariableVector sum_of_partials = vector_of_zeros(partial_names);
 
 	VariableVector *partials;
+	int find_partials_success = 0;
+
 
 	for (vector<pair<VariableVector, VariableVector> >::const_iterator datum = training_data.begin(); datum != training_data.end(); ++datum) {
 
@@ -168,9 +186,13 @@ VariableVector avg_gradient(const string& gcp_filename, const vector<string>& pa
 
 		VariableVector inputs = datum->first;
 		VariableVector outputs = datum->second;
-		find_partials(gcp_filename, partials, weights, inputs, outputs);
+		
+		find_partials_success = find_partials(gcp_filename, partials, weights, inputs, outputs);
+		if (find_partials_success != 0) return empty;
 
 		sum_of_partials = add_variable_vectors(sum_of_partials, *partials);
+		if (sum_of_partials.size() == 0) return empty;
+
 		delete partials;
 	}
 
@@ -206,9 +228,13 @@ VariableVector component_wise_div(const VariableVector& vec, float divisor) {
 
 VariableVector add_variable_vectors(const VariableVector& vec1, const VariableVector& vec2) {
 	
+	VariableVector empty;
 	VariableVector sum;
 	string var_name;
 	float component_sum;
+
+	// if the vectors are of different sizes, return empty
+	if (vec1.size() != vec2.size()) return empty;
 
 	for (VariableVector::const_iterator it1 = vec1.begin(); it1 != vec1.end(); ++it1) {
 
@@ -219,23 +245,14 @@ VariableVector add_variable_vectors(const VariableVector& vec1, const VariableVe
 			component_sum = it1->second + vec2.at(var_name);
 			sum.insert(make_pair(var_name, component_sum));
 		} 
-		// if this variable is only in vec1, place the vec1 value in the sum vector
+		// if this variable is only in vec1, return empty
 		else {
-			sum.insert(make_pair(var_name, it1->second));
+			return empty;
 		}
 	}
 
-	for (VariableVector::const_iterator it2 = vec2.begin(); it2 != vec2.end(); ++it2) {
-
-		var_name = it2->first;
-
-		// if this variable is in both vectors, the previous for loop will have taken care of it
-		if (vec1.count(var_name) != 0) {
-			continue;
-		}
-		// if this variable is only in vec2, place the vec2 value in the sum vector
-		sum.insert(make_pair(var_name, it2->second));
-	}
+	// if we reach this point, every variable in vec1 is also in vec2
+	// since both vectors are of the same size, it is safe to return
 
 	return sum;
 }
@@ -244,10 +261,37 @@ int find_partials(const string& gcp_filename, VariableVector *partials,
 				const VariableVector& weights, const VariableVector& inputs,
 				const VariableVector& outputs) {
 
-	VariableVector inputs_to_interpreter = variable_vector_union(weights, variable_vector_union(inputs, outputs));
+	// accumulate the inputs to the interpreter
+	// make sure there is no overlap between the names of the weights, inputs and output variables
+	VariableVector inputs_outputs = variable_vector_union(inputs, outputs);
+	if (inputs_outputs.size() == 0) {
+		return VAR_DECLARED_TWICE;
+	}
+
+	VariableVector inputs_to_interpreter = variable_vector_union(weights, inputs_outputs);
+	if (inputs_to_interpreter.size() == 0) {
+		return VAR_DECLARED_TWICE;
+	}
 
 	Interpreter i;
 	int success = i.interpret(gcp_filename, inputs_to_interpreter, partials);
+
+	/*for (unordered_map<string, float>::const_iterator it = weights.begin(); it != weights.end(); ++it) {
+		cout << "Weight name: " << it->first << ", Value: " << it->second << ",    ";
+	}
+	cout << endl;
+	for (unordered_map<string, float>::const_iterator it2 = inputs.begin(); it2 != inputs.end(); ++it2) {
+		cout << "Input name: " << it2->first << ", Value: " << it2->second << ",    ";
+	}
+	cout << endl;
+	for (unordered_map<string, float>::const_iterator it3 = outputs.begin(); it3 != outputs.end(); ++it3) {
+		cout << "Exp Output name: " << it3->first << ", Value: " << it3->second << ",    ";
+	}
+	cout << endl;
+	for (unordered_map<string, float>::iterator it4 = partials->begin(); it4 != partials->end(); ++it4) {
+		cout << "Partial name: " << it4->first << ", Value: " << it4->second << ",    ";
+	}
+	cout << endl << endl << endl;*/
 
 	return success;
 
@@ -255,16 +299,20 @@ int find_partials(const string& gcp_filename, VariableVector *partials,
 
 const VariableVector variable_vector_union(const VariableVector& vec1, const VariableVector& vec2) {
 
+	VariableVector empty;
 	VariableVector v;
 
+	// add all the variables in Vec 1 first
+	// if any of these variables are seen in Vec 2, this is an error. Return the empty Variable Vector.
+	// if there is no overlap, then it is safe to add all the variables in Vec 2
 	for (VariableVector::const_iterator it1 = vec1.begin(); it1 != vec1.end(); ++it1) {
+		if (vec2.count(it1->first) != 0) {
+			return empty;
+		}
 		v.insert(make_pair(it1->first, it1->second));
 	}
 
 	for (VariableVector::const_iterator it2 = vec2.begin(); it2 != vec2.end(); ++it2) {
-		if (v.count(it2->first) != 0) {
-			continue;
-		}
 		v.insert(make_pair(it2->first, it2->second));
 	}
 

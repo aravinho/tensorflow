@@ -14,8 +14,11 @@ void test_comp_constructor_compile_destructor() {
 	assert_equal_int(c->get_dfg()->get_num_nodes(), 0, "test_comp_constructor_compile_destructor");
 
 	// make sure the test Expanded Shape Program is correctly compiled into the GCP
-	assert_equal_int(c->compile("tests/test_files/inputs/expanded_shape_complex.tf", "tests/test_files/outputs/gcp_complex.tf"), 0, "test_comp_constructor_compile_destructor");
 	assert_identical_files("tests/test_files/outputs/gcp_complex.tf", "tests/test_files/exp_outputs/gcp_complex.tf", "test_comp_constructor_compile_destructor");
+
+	// compile the small net shape into a small net GCP
+	assert_equal_int(c->compile("tests/test_files/inputs/small_net_shape.tf", "tests/test_files/outputs/small_net_gcp.tf"), 0, "test_comp_constructor_compile_destructor");
+
 
 	// make sure the destructor deletes the DFG without problems
 	delete c;

@@ -8,9 +8,7 @@
 
 using namespace std;
 
-float logistic(int x) {
-	return 1 / (1 + exp(-1 * x));
-}
+
 
 void test_interp_constructor_interpret_destructor() {
 

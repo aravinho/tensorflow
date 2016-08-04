@@ -1,3 +1,4 @@
+#include <iostream>
 #include <cfloat>
 #include <string>
 
@@ -43,7 +44,9 @@ int BindingsDictionary::bind_value(string name, float value) {
 		return -1;
 	}
 
-	if (value == FLT_MIN || value == FLT_MAX) return -1;
+	if (value == FLT_MIN || value == FLT_MAX) {
+		return -1;
+	}
 
 	(*bindings)[name] = value;
 	return 0;

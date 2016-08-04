@@ -50,7 +50,7 @@ int Interpreter::interpret(const string& filename, const unordered_map<string, f
         getline(prog, line);
         parse_success = parse_line(line, inputs);
         if (parse_success != 0) {
-            cerr << "Invalid line: " << line << endl;
+            cerr << "Invalid line: " << line << ", " << parse_success << endl;
             return parse_success;
         }
     }
@@ -177,8 +177,9 @@ int Interpreter::parse_line(const string& line, const unordered_map<string, floa
         // if either operand is a variable, grab its value from the Bindings Dictionary.
         // evaluate the expression, and bind the current variable to this value.
         if (is_binary_primitive(tokens->at(3))) {
-
+            //if (line == "define j = mul a_times_c g") cout << "is binary primitive" << endl;
             if (num_tokens != 6) return INVALID_LINE;
+           // if (line == "define j = mul a_times_c g") cout << "is binary primitive good" << endl;
 
         	float operand1, operand2;
 
@@ -196,9 +197,11 @@ int Interpreter::parse_line(const string& line, const unordered_map<string, floa
         		if (!bindings->has_been_defined(tokens->at(5))) return VAR_REFERENCED_BEFORE_DEFINED;
         		operand2 = bindings->get_value(string(tokens->at(5)));
         	}
+            //if (line == "define d/k/d/c_times_h = mul d/k/d/c_times_h:0 d/k/d/c_times_h:3") cout << "operand1: " << operand1 << ", operand2: " << operand2 << endl;
 
         	float new_var_value = apply_binary_operation(operation, operand1, operand2);
         	success = bindings->bind_value(var_name, new_var_value);
+            //if (line == "define j = mul a_times_c g") cout << "binding success: " << success << endl;
             return success;
         }
 
@@ -258,7 +261,6 @@ float apply_binary_operation(OperationType operation, float operand1, float oper
 
     if (operation == OperationType::POW) {
         if (operand1 == 0 && operand2 < 0) {
-            cerr << "Divide by zero error." << endl;
             return FLT_MIN;
         }
         result = pow(operand1, operand2);

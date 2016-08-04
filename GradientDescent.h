@@ -27,13 +27,13 @@ using namespace std;
 
 
 /* The learning rate determines how much the weights are incremented after each iteration of the algorithm. */
-#define LEARNING_RATE 0.05
+#define LEARNING_RATE 0.1
 /* This defines how many iterations to stop after. More iterations tends to result in more precision. */
 #define MAX_NUM_ITERATIONS 1000
 /* This variable determines how the maximum magnitude of the gradient vector after which the algorithm can terminate.
  * If the gradient never becomes this small, the algorithm will terminate after MAX_NUM_ITERATIONS.
  */
-#define GRADIENT_PRECISION 0.5
+#define GRADIENT_PRECISION 0.0005
 
 
 /* A VariableVector is an abstraction used to represent a vector of inputs, outputs or weights.
@@ -73,7 +73,8 @@ VariableVector calculate_weights(const string& gcp_filename, const vector<string
  *	averaged over the entire set of Training Data.
  * It takes in a VariableVector of weights and a set of Training Data.
  * Recall that training data is provided as a list of {input VariableVector, output VariableVector} pairs.
- * This method repeatedly calls find_partials, which interprets the given GCP to determine the value of the partial derivatives.
+ * This method repeatedly calls find_partials, once for each datum in the Training Set.
+ * find_partials interprets the given GCP to determine the value of the partial derivatives for a particular weight-training_datum pair.
  *
  * This method works as follows:
  *
@@ -112,7 +113,7 @@ int find_partials(const string& gcp_filename, VariableVector *partials,
 
 
 /* Returns a VariableVector that is the union of the two given VariableVectors.
- * If the same variable name appears in both vectors, it is only bound to its value from vec1.
+ * If the same variable name appears in both vectors, return an empty VariableVector.
  */
 const VariableVector variable_vector_union(const VariableVector& vec1, const VariableVector& vec2);
 
@@ -122,9 +123,9 @@ const VariableVector variable_vector_union(const VariableVector& vec1, const Var
 VariableVector vector_of_zeros(const vector<string>& var_names);
 
 /* Returns a vector.
- * Every variable in vec1 and every variable in vec2 is in it.
- * If both vec1 and vec2 have a certain variable, the value in the resulting sum vector will be the sum of vec1's value and vec2's value.
- * If only one of vec1 and vec1 have the variable, the value in the resulting sum vector will the value from which vector has it.
+ * Every variable in this returned vector is bound to the sum of vec1's value and vec2's value.
+ * This means that both vec1 and vec2 must have the same set of variables.
+ * If vec1 and vec2 differ in their variables, an empty VariableVector is returned.
  */
 VariableVector add_variable_vectors(const VariableVector& vec1, const VariableVector& vec2);
 
