@@ -2,7 +2,7 @@
 #include <fstream>
 
 #include "TestCompiler.h"
-#include "../Compiler.h"
+#include "../src/Compiler.h"
 #include "TestUtilities.h"
 
 using namespace std;
@@ -245,7 +245,6 @@ void test_comp_define_partial_lambda() {
 	parent->set_operation(OperationType::EXP);
 
 	
-
 	Node *lambda = new Node("lambda", false);
 	lambda->set_type(VariableType::LOSS);
 	lambda->set_child(parent);
@@ -407,7 +406,7 @@ void test_comp_define_child_partials() {
 	j->set_child(i);
 	k->set_child(j); k->set_child(j);
 
-	d->set_operation(OperationType::ADD);
+	d->set_operation(OperationType::SUB);
 	e->set_operation(OperationType::EXP);
 	f->set_operation(OperationType::MUL);
 	h->set_operation(OperationType::POW);
@@ -435,7 +434,7 @@ void test_comp_define_child_partials() {
 		"define d/f/d/d = e",
 
 		"declare intvar d/h/d/f:0", "declare intvar d/h/d/f:1",
-			"define d/h/d/f:0 = add -1 g", "define d/h/d/f:1 = pow f d/h/d/f:0",
+			"define d/h/d/f:0 = sub g 1", "define d/h/d/f:1 = pow f d/h/d/f:0",
 			"define d/h/d/f = mul g d/h/d/f:1",
 
 		"define d/i/d/h = pow h -1",
@@ -449,7 +448,7 @@ void test_comp_define_child_partials() {
 	};
 
 	string child_two_definitions[8] = {
-		"define d/d/d/b = 1",
+		"define d/d/d/b = -1",
 
 		"define d/f/d/e = d",
 
@@ -466,9 +465,6 @@ void test_comp_define_child_partials() {
 	write_scratch_file.close();
 	delete a; delete b; delete c; delete d; delete e; delete f; delete g; delete h; delete i; delete j; delete k;
 	pass("test_comp_define_child_partials");
-
-}
-void test_comp_define_child_two_partial() {
 
 }
 

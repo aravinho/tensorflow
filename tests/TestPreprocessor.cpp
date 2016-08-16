@@ -2,7 +2,7 @@
 #include <fstream>
 
 #include "TestPreprocessor.h"
-#include "../Preprocessor.h"
+#include "../src/Preprocessor.h"
 #include "TestUtilities.h"
 
 using namespace std;
@@ -72,13 +72,10 @@ void test_pp_expand_line() {
 	assert_equal_int(p.defined_variables->count("x"), 1, "test_pp_expand_line");
 	assert_equal_int(p.defined_variables->count("p"), 0, "test_pp_expand_line");
 
-	ifstream read_scratch_file("scratch.tf");
-	string line;
-	getline(read_scratch_file, line);
-	assert_equal_string(line, "declare input x", "test_pp_expand_line");
-	getline(read_scratch_file, line);
-	assert_equal_string(line, "declare intvar p", "test_pp_expand_line");
-
+	// make sure the declarations got copied without expansion
+	string declarations[2] = {"declare input x", "declare intvar p"};
+	assert_equal_file_lines("scratch.tf", declarations, 0, 2, "test_pp_expand_line");
+	
 	// make sure an attempted macro definition fails
 	assert_equal_int(p.expand_line("#macro c = my_macro a; define c = 3;", write_scratch_file), MACROS_NOT_AT_TOP, "test_pp_expand_line");
 
@@ -99,7 +96,6 @@ void test_pp_expand_line() {
 	assert_equal_int(p.expand_line("define_vector output_vec = mul input_vec p", write_scratch_file), 3, "test_pp_expand_line");
 	assert_equal_int(p.defined_variables->count("output_vec"), 1, "test_pp_expand_line");
 
-	read_scratch_file.close();
 	write_scratch_file.close();
 	pass("test_pp_expand_line");
 
@@ -149,26 +145,15 @@ void test_pp_expand_define() {
 	assert_equal_int(p.expand_line("declare intvar b", write_scratch_file), 1, "test_pp_expand_define");
 
 	// define as constant, binary operation, unary operation, equivalent to another variable
-	string lines[4] = {"define y = 3", "define z = add y x", "define a = logistic z", "define b = a"};
+	string lines[4] = {"define y = 3", "define z = sub y x", "define a = logistic z", "define b = a"};
 	for (int i = 0; i < 4; i++) {
 		assert_equal_int(p.expand_define_instruction(lines[i], write_scratch_file), 1, "test_pp_expand_define");
 	}
 
 	write_scratch_file.close();
 
-	ifstream read_scratch_file("scratch.tf");
-	string line;
-
-	// read through all the declarations
-	for (int j = 0; j < 5; j++) getline(read_scratch_file, line);
-
-	// make sure all definitions succeeded but no expansions were done
-	for (int k = 0; k < 4; k++) {
-		getline(read_scratch_file, line);
-		assert_equal_string(line, lines[k], "test_pp_expand_define");
-	}
-
-	read_scratch_file.close();
+	// make sure the definitions are copied without expansion
+	assert_equal_file_lines("scratch.tf", lines, 5, 4, "test_pp_expand_define");
 
 	pass("test_pp_expand_define");
 
@@ -860,7 +845,7 @@ void test_pp_is_valid_define_line() {
 	assert_equal_int(p.is_valid_define_line("define x 3"), INVALID_LINE, "test_pp_is_valid_define_line");
 	assert_equal_int(p.is_valid_define_line("define x = add a b c"), INVALID_LINE, "test_pp_is_valid_define_line");
 	assert_equal_int(p.is_valid_define_line("defin x = ln y"), INVALID_LINE, "test_pp_is_valid_define_line");
-	assert_equal_int(p.is_valid_define_line("define add = 9"), INVALID_LINE, "test_pp_is_valid_define_line");
+	assert_equal_int(p.is_valid_define_line("define add = 9"), INVALID_VAR_NAME, "test_pp_is_valid_define_line");
 	
 	// cannot define input, weight or exp_output
 	p.expand_line("declare input x", write_scratch_file);
@@ -921,6 +906,7 @@ void test_pp_is_valid_define_line() {
 
 	p.expand_line("declare_vector intvar u 3", write_scratch_file);
 	p.expand_line("declare_vector input v 3", write_scratch_file);
+	p.expand_line("declare_vector input four_d_vec 4", write_scratch_file);
 	p.expand_line("declare_vector output t 3", write_scratch_file);
 	p.expand_line("declare_vector intvar f 4", write_scratch_file);
 
@@ -933,7 +919,7 @@ void test_pp_is_valid_define_line() {
 	assert_equal_int(p.is_valid_define_line("define p = dot u v t"), INVALID_LINE, "test_pp_is_valid_define_line");
 	assert_equal_int(p.is_valid_define_line("define p = dot v"), INVALID_LINE, "test_pp_is_valid_define_line");
 	assert_equal_int(p.is_valid_define_line("define p = dot u v"), VAR_REFERENCED_BEFORE_DEFINED, "test_pp_is_valid_define_line");
-	assert_equal_int(p.is_valid_define_line("define p = dot v f"), VECTORS_OF_DIFFERENT_DIMENSION, "test_pp_is_valid_define_line");
+	assert_equal_int(p.is_valid_define_line("define p = dot v four_d_vec"), VECTORS_OF_DIFFERENT_DIMENSION, "test_pp_is_valid_define_line");
 
 	// some successful binary vector operation definitions
 	assert_equal_int(p.is_valid_define_line("define p = dot v v"), 0, "test_pp_is_valid_define_line");
@@ -988,7 +974,7 @@ void test_pp_is_valid_define_vector_line() {
 	assert_equal_int(p.is_valid_define_vector_line("define_vector x y"), INVALID_LINE, "test_pp_is_valid_define_vector_line");
 	assert_equal_int(p.is_valid_define_vector_line("define_vector x = add a b c"), INVALID_LINE, "test_pp_is_valid_define_vector_line");
 	assert_equal_int(p.is_valid_define_vector_line("defin_vector x = ln y"), INVALID_LINE, "test_pp_is_valid_define_vector_line");
-	assert_equal_int(p.is_valid_define_vector_line("define_vector add = add x y"), INVALID_LINE, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.is_valid_define_vector_line("define_vector add = add x y"), INVALID_VAR_NAME, "test_pp_is_valid_define_vector_line");
 	
 	// cannot define input, weight or exp_output vectors
 	p.expand_line("declare_vector input x 3", write_scratch_file);
@@ -1005,8 +991,8 @@ void test_pp_is_valid_define_vector_line() {
 	assert_equal_int(p.is_valid_define_vector_line("define_vector d = logistic x"), VAR_DEFINED_BEFORE_DECLARED, "test_pp_is_valid_define_vector_line");
 
 	// cannot define vectors that have already been defined
-	p.expand_line("declare_vector intvar z 3", write_scratch_file);
-	p.expand_line("define_vector z = mul x w", write_scratch_file);
+	assert_equal_int(p.expand_line("declare_vector intvar z 3", write_scratch_file), 3, "test_pp_is_valid_define_vector_line");
+	assert_equal_int(p.expand_line("define_vector z = mul x w", write_scratch_file), 3, "test_pp_is_valid_define_vector_line");
 	assert_equal_int(p.is_valid_define_vector_line("define_vector z = exp w"), VAR_DEFINED_TWICE, "test_pp_is_valid_define_vector_line");
 	assert_equal_int(p.is_valid_define_vector_line("define_vector z = add x w"), VAR_DEFINED_TWICE, "test_pp_is_valid_define_vector_line");
 	assert_equal_int(p.is_valid_define_vector_line("define_vector z = my_binary_macro x w"), VAR_DEFINED_TWICE, "test_pp_is_valid_define_vector_line");
@@ -1088,6 +1074,207 @@ void test_pp_is_valid_declare_vector_line() {
 	pass("test_pp_is_valid_declare_vector_line");
 }
 
+void test_vector_component_functions() {
+
+	Preprocessor p;
+	ofstream write_scratch_file("scratch.tf");
+
+	// declare vector x
+	assert_equal_int(p.expand_line("declare_vector intvar x 3", write_scratch_file), 3, "test_vector_component_functions");
+	// make sure x's components are marked as defined
+	// check basic error catching of is_vector_component
+	assert_true(p.is_vector_component("x.0"), "X.0 should be a valid component", "test_vector_component_functions");
+	assert_false(p.is_vector_component("x.3"), "X.2 is a valid component", "test_vector_component_functions");
+	assert_false(p.is_vector_component("x1"), "X1 is NOT a valid component", "test_vector_component_functions");
+	assert_false(p.is_vector_component("y.0"), "Y.0 is a valid component", "test_vector_component_functions");
+
+	// check that none of X's components have been defined
+	assert_false(p.has_defined_components("y"), "Y has no defined components", "test_vector_component_functions");
+	assert_false(p.has_defined_components("x"), "X has no defined components yet", "test_vector_component_functions");
+	// define x.0 individually, make sure x now has defined components
+	assert_equal_int(p.expand_line("define x.0 = sub 3 2", write_scratch_file), 1, "test_vector_component_functions");
+	assert_true(p.has_defined_components("x"), "X now has defined components", "test_vector_component_functions");
+
+	// check that not all of X's components are defined
+	assert_false(p.all_components_defined("x"), "Not all of X's components are defined yet", "test_vector_component_functions");
+	assert_false(p.all_components_defined("Y"), "Not all of Y's components are defined (Y is not defined at all)", "test_vector_component_functions");
+	// define x.1 and x.2
+	assert_equal_int(p.expand_line("define x.1 = add x.0 1", write_scratch_file), 1, "test_vector_component_functions");
+	assert_equal_int(p.expand_line("define x.2 = 3", write_scratch_file), 1, "test_vector_component_functions");
+	// check that all of X's components are defined
+	assert_true(p.all_components_defined("x"), "All of X's components are defined", "test_vector_component_functions");
+
+	pass("test_vector_component_functions");
+
+}
+
+void test_define_vector_components() {
+
+	Preprocessor p;
+	ofstream write_scratch_file("scratch.tf");
+
+	// declare an intvar and input vector
+	// make sure all the components of both vectors are in the variables map
+	// make sure the components of the input vector are in the defined_variables set
+	assert_equal_int(p.expand_line("declare_vector input x 3", write_scratch_file), 3, "test_define_vector_components");
+	assert_equal_int(p.expand_line("declare_vector intvar z 3", write_scratch_file), 3, "test_define_vector_components");
+
+	assert_equal_int(p.variables->size(), 6, "test_define_vector_components");
+	assert_equal_int(p.vectors->size(), 2, "test_define_vector_components");
+	assert_equal_int(p.vectors->count("x"), 1, "test_define_vector_components");
+	assert_equal_int(p.vectors->count("z"), 1, "test_define_vector_components");
+
+	assert_equal_int(p.variables->count("x.0"), 1, "test_define_vector_components");
+	assert_equal_int(p.variables->count("x.1"), 1, "test_define_vector_components");
+	assert_equal_int(p.variables->count("x.2"), 1, "test_define_vector_components");
+	assert_equal_int(p.variables->count("z.0"), 1, "test_define_vector_components");
+	assert_equal_int(p.variables->count("z.1"), 1, "test_define_vector_components");
+	assert_equal_int(p.variables->count("z.2"), 1, "test_define_vector_components");
+	
+	assert_equal_int(p.defined_variables->size(), 4, "test_define_vector_components");
+	assert_equal_int(p.defined_variables->count("x"), 1, "test_define_vector_components");
+	assert_equal_int(p.defined_variables->count("x.0"), 1, "test_define_vector_components");
+	assert_equal_int(p.defined_variables->count("x.1"), 1, "test_define_vector_components");
+	assert_equal_int(p.defined_variables->count("x.2"), 1, "test_define_vector_components");
+
+	// try to define a component of input vector X. This should fail.
+	assert_equal_int(p.expand_line("define x.1 = 3", write_scratch_file), CANNOT_DEFINE_I_W_EO, "test_define_vector_components");
+
+	// define Z.0. This should succeed.
+	// Z.0 should now be in the defined_variables set
+	assert_equal_int(p.expand_line("define z.0 = 10", write_scratch_file), 1, "test_define_vector_components");
+	assert_equal_int(p.defined_variables->count("z.0"), 1, "test_define_vector_components");
+
+	// try to redefine Z.0. This should fail.
+	assert_equal_int(p.expand_line("define z.0 = 0", write_scratch_file), VAR_DEFINED_TWICE, "test_define_vector_components");
+
+	// declare intvar vector P.
+	assert_equal_int(p.expand_line("declare_vector intvar p 3", write_scratch_file), 3, "test_define_vector_components");
+	// define P as an operation of X and Z.
+	// This should fail because Z is not fully defined
+	assert_equal_int(p.expand_line("define_vector p = mul x z", write_scratch_file), VAR_REFERENCED_BEFORE_DEFINED, "test_define_vector_components");
+
+	// try to define_vector Z as an operation of X.
+	// this should fail because one of Z's components has already been defined
+	assert_equal_int(p.expand_line("define_vector z = exp x", write_scratch_file), VAR_DEFINED_TWICE, "test_define_vector_components");
+
+	// define Z.1 and Z.2
+	// these should succeed.  Make sure Z.1 and Z.2 are now both in the defined_variables set
+	assert_equal_int(p.expand_line("define z.1 = 20", write_scratch_file), 1, "test_define_vector_components");
+	assert_equal_int(p.expand_line("define z.2 = 30", write_scratch_file), 1, "test_define_vector_components");
+	assert_equal_int(p.defined_variables->count("z.1"), 1, "test_define_vector_components");
+	assert_equal_int(p.defined_variables->count("z.2"), 1, "test_define_vector_components");
+
+	// define P as a function of Z
+	// this should succeed
+	assert_equal_int(p.expand_line("define_vector p = add z z", write_scratch_file), 3, "test_define_vector_components");
+	// P and its components should now all be in the defined_variables set
+	assert_equal_int(p.defined_variables->count("p"), 1, "test_define_vector_components");
+	assert_equal_int(p.defined_variables->count("p.0"), 1, "test_define_vector_components");
+	assert_equal_int(p.defined_variables->count("p.1"), 1, "test_define_vector_components");
+	assert_equal_int(p.defined_variables->count("p.2"), 1, "test_define_vector_components");
+	// Z itself should now be in the defined_variables set
+	//	(During P's definition, we should realize all of Z's components are defined, and thus mark Z as defined)
+	assert_equal_int(p.defined_variables->count("z"), 1, "test_define_vector_components");
+
+	// try to define p.0. This should fail because P (and thus P.0) is already defined
+	assert_equal_int(p.expand_line("define p.0 = 2", write_scratch_file), VAR_DEFINED_TWICE, "test_define_vector_components");
+
+	pass("test_define_vector_components");
+
+}
+
+void test_is_valid_reduce_vector_line() {
+
+	Preprocessor p;
+	ofstream write_scratch_file("scratch.tf");
+
+	// define a binary macro
+	assert_equal_int(p.expand_line("#macro c = my_binary_macro a b; declare intvar p; define p = mul b a; define c = logistic p;", write_scratch_file), 0, "test_pp_expand_line");
+
+	// declare an input vector X, input foo, and intvar Z
+	assert_equal_int(p.expand_line("declare_vector input x 3", write_scratch_file), 3, "test_pp_expand_define_vector");
+	assert_equal_int(p.expand_line("declare intvar z", write_scratch_file), 1, "test_pp_expand_define_vector");
+	assert_equal_int(p.expand_line("declare input foo", write_scratch_file), 1, "test_pp_expand_define_vector");
+
+	// declare intvar vector V
+	assert_equal_int(p.expand_line("declare_vector intvar v 3", write_scratch_file), 3, "test_pp_expand_define_vector");
+
+	// trivial errors
+	assert_equal_int(p.is_valid_define_line("define z = reduce_vector x"), INVALID_LINE, "test_is_valid_reduce_vector_line");
+	assert_equal_int(p.is_valid_define_line("define p = reduce_vector x add"), VAR_DEFINED_BEFORE_DECLARED, "test_is_valid_reduce_vector_line");
+	assert_equal_int(p.is_valid_define_line("define foo = reduce_vector x add"), CANNOT_DEFINE_I_W_EO, "test_is_valid_reduce_vector_line");
+	assert_equal_int(p.is_valid_define_line("define z = reduce_vector p mul"), VAR_REFERENCED_BEFORE_DEFINED, "test_is_valid_reduce_vector_line");
+	assert_equal_int(p.is_valid_define_line("define z = reduce_vector v add"), VAR_REFERENCED_BEFORE_DEFINED, "test_is_valid_reduce_vector_line");
+	assert_equal_int(p.is_valid_define_line("define z = reduce_vector x addition"), INVALID_LINE, "test_is_valid_reduce_vector_line");
+	assert_equal_int(p.is_valid_define_line("define z = reduce_vector x non_existent_macro"), INVALID_LINE, "test_is_valid_reduce_vector_line");
+
+	// successful definition of Z as a reduction of X
+	assert_equal_int(p.is_valid_define_line("define z = reduce_vector x mul"), 0, "test_is_valid_reduce_vector_line");
+	// define V's components, make sure the reduction of V succeeds
+	assert_equal_int(p.expand_line("define v.0 = 3", write_scratch_file), 1, "test_pp_expand_define_vector");
+	assert_equal_int(p.expand_line("define v.1 = 4", write_scratch_file), 1, "test_pp_expand_define_vector");
+	assert_equal_int(p.expand_line("define v.2 = 5", write_scratch_file), 1, "test_pp_expand_define_vector");
+	assert_equal_int(p.is_valid_define_line("define z = reduce_vector v my_binary_macro"), 0, "test_is_valid_reduce_vector_line");
+	// make sure V is now marked as defined
+	assert_equal_int(p.defined_variables->count("v"), 1, "test_is_valid_reduce_vector_line");
+
+	pass("test_is_valid_reduce_vector_line");
+
+}
+
+void test_reduce_vector() {
+
+	Preprocessor p;
+	ofstream write_scratch_file("scratch.tf");
+
+	// define a binary macro
+	assert_equal_int(p.expand_line("#macro c = my_binary_macro a b; declare intvar p; define p = mul b a; define c = logistic p;", write_scratch_file), 0, "test_pp_expand_line");
+
+	// declare input vector X
+	assert_equal_int(p.expand_line("declare_vector input x 3", write_scratch_file), 3, "test_reduce_vector");
+
+	// define a as the sum of the components in X (using expand_line)
+	assert_equal_int(p.expand_line("declare intvar a", write_scratch_file), 1, "test_reduce_vector");
+	assert_equal_int(p.expand_line("define a = reduce_vector x add", write_scratch_file), 5, "test_reduce_vector");
+	string a_reduction_lines[5] = {"declare intvar a.0", "define a.0 = add x.0 x.1",
+		"declare intvar a.1", "define a.1 = add a.0 x.2", "define a = a.1"};
+	assert_equal_file_lines("scratch.tf", a_reduction_lines, 4, 5, "test_reduce_vector");
+
+	// define B as the product of the components in X
+	assert_equal_int(p.expand_line("declare intvar b", write_scratch_file), 1, "test_reduce_vector");
+	assert_equal_int(p.expand_reduce_vector_instruction("b", "x", "mul", 3, write_scratch_file), 5, "test_reduce_vector");
+	string b_reduction_lines[5] = {"declare intvar b.0", "define b.0 = mul x.0 x.1",
+		"declare intvar b.1", "define b.1 = mul b.0 x.2", "define b = b.1"};
+	assert_equal_file_lines("scratch.tf", b_reduction_lines, 10, 5, "test_reduce_vector");
+
+	// define C as the reduction of X under the function my_binary_macro
+	assert_equal_int(p.expand_line("declare intvar c", write_scratch_file), 1, "test_reduce_vector");
+	assert_equal_int(p.expand_reduce_vector_instruction("c", "x", "my_binary_macro", 3, write_scratch_file), 9, "test_reduce_vector");
+	string c_reduction_lines[9] = {
+		"declare intvar c.0", "declare intvar c.0_p0", "define c.0_p0 = mul x.1 x.0", "define c.0 = logistic c.0_p0",
+		"declare intvar c.1", "declare intvar c.1_p1", "define c.1_p1 = mul x.2 c.0", "define c.1 = logistic c.1_p1",
+		"define c = c.1"
+	};
+	assert_equal_file_lines("scratch.tf", c_reduction_lines, 16, 9, "test_reduce_vector");
+
+	// edge case, define D as the reduction of Y, a one-element vector under mul
+	assert_equal_int(p.expand_line("declare intvar d", write_scratch_file), 1, "test_reduce_vector");
+	assert_equal_int(p.expand_line("declare_vector weight y 1", write_scratch_file), 1, "test_reduce_vector");
+	assert_equal_int(p.expand_reduce_vector_instruction("d", "y", "mul", 1, write_scratch_file), 1, "test_reduce_vector");
+	string d_reduction_lines[1] = {"define d = y.0"};
+	assert_equal_file_lines("scratch.tf", d_reduction_lines, 27, 1, "test_reduce_vector");
+
+	// edge case, define E as the reduction of Y, a one-element vector, under my_binary_macro
+	assert_equal_int(p.expand_line("declare intvar e", write_scratch_file), 1, "test_reduce_vector");
+	assert_equal_int(p.expand_reduce_vector_instruction("e", "y", "my_binary_macro", 1, write_scratch_file), 1, "test_reduce_vector");
+	string e_reduction_lines[1] = {"define e = y.0"};
+	assert_equal_file_lines("scratch.tf", e_reduction_lines, 29, 1, "test_reduce_vector");
+
+	pass("test_reduce_vector");
+}
+
+
 void run_pp_tests() {
 
 	cout << "\nTesting Preprocessor Class... " << endl << endl;
@@ -1114,6 +1301,10 @@ void run_pp_tests() {
 	test_pp_is_valid_define_line();
 	test_pp_is_valid_define_vector_line();
 	test_pp_is_valid_declare_vector_line();
+	test_vector_component_functions();
+	test_define_vector_components();
+	test_is_valid_reduce_vector_line();
+	test_reduce_vector();
 
 	cout << "\nAll Preprocessor Tests Passed." << endl << endl;
 

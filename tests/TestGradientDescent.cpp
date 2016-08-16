@@ -4,7 +4,7 @@
 #include <time.h>
 
 #include "TestGradientDescent.h"
-#include "../GradientDescent.h"
+#include "../src/GradientDescent.h"
 #include "TestUtilities.h"
 
 using namespace std;
@@ -32,10 +32,10 @@ void test_gd_calculate_weights() {
 	vector<pair<VariableVector, VariableVector> > training_data;
 	VariableVector td_input, td_output;
 
-	float a = 1, b = 2, c = 3;
+	double a = 1, b = 2, c = 3;
 	td_input = {{"a", a}, {"b", b}, {"c", c}};
 
-	float m, n, p;
+	double m, n, p;
 
 	// seed the RNG for the generate_approximate function
 	srand(time(NULL));
@@ -60,12 +60,12 @@ void test_gd_calculate_weights() {
 	VariableVector weights = calculate_weights("tests/test_files/inputs/small_net_gcp.tf", weight_names, partial_names, training_data);
 
 	// test to see that the final weights f, g and h are reasonably close to the 0.4, 0.2 and 0.1
-	assert_approximately_equal_float(weights.at("f"), 0.4, 0.03, "test_gd_calculate_weights");
-	assert_approximately_equal_float(weights.at("g"), 0.2, 0.03, "test_gd_calculate_weights");
-	assert_approximately_equal_float(weights.at("h"), 0.1, 0.03, "test_gd_calculate_weights");
+	assert_approximately_equal_double(weights.at("f"), 0.4, 0.03, "test_gd_calculate_weights");
+	assert_approximately_equal_double(weights.at("g"), 0.2, 0.03, "test_gd_calculate_weights");
+	assert_approximately_equal_double(weights.at("h"), 0.1, 0.03, "test_gd_calculate_weights");
 
 	pass("test_gd_calculate_weights");
-	
+
 }
 
 void test_gd_avg_gradient() {
@@ -90,10 +90,10 @@ void test_gd_avg_gradient() {
 	vector<pair<VariableVector, VariableVector> > training_data;
 	VariableVector td_input, td_output;
 
-	float a = 1, b = 2, c = 3;
+	double a = 1, b = 2, c = 3;
 	td_input = {{"a", a}, {"b", b}, {"c", c}};
 
-	float m, n, p;
+	double m, n, p;
 
 	// seed the RNG for the generate_approximate function
 	srand(time(NULL));
@@ -137,10 +137,10 @@ void test_gd_find_partials() {
 
 	VariableVector weights = {{"f", 0.35}, {"g", 0.24}, {"h", 0.08}};
 
-	float a = 1, b = 2, c = 3;
+	double a = 1, b = 2, c = 3;
 	VariableVector inputs = {{"a", a}, {"b", b}, {"c", c}};
 
-	float m, n, p;
+	double m, n, p;
 	m = logistic(1 * .4);
 	n = logistic(2 * .2);
 	p = logistic(3 * .10);
@@ -174,33 +174,33 @@ void test_gd_variable_vector_union() {
 	VariableVector v1_union_empty = variable_vector_union(v1, empty);
 
 	assert_equal_int(empty_union_v1.size(), 3, "test_gd_variable_vector_union");
-	assert_equal_float(empty_union_v1.at("a"), 1, "test_gd_variable_vector_union");
-	assert_equal_float(empty_union_v1.at("b"), -3, "test_gd_variable_vector_union");
-	assert_equal_float(empty_union_v1.at("c"), 5, "test_gd_variable_vector_union");
+	assert_equal_double(empty_union_v1.at("a"), 1, "test_gd_variable_vector_union");
+	assert_equal_double(empty_union_v1.at("b"), -3, "test_gd_variable_vector_union");
+	assert_equal_double(empty_union_v1.at("c"), 5, "test_gd_variable_vector_union");
 	assert_equal_int(v1_union_empty.size(), 3, "test_gd_variable_vector_union");
-	assert_equal_float(v1_union_empty.at("a"), 1, "test_gd_variable_vector_union");
-	assert_equal_float(v1_union_empty.at("b"), -3, "test_gd_variable_vector_union");
-	assert_equal_float(v1_union_empty.at("c"), 5, "test_gd_variable_vector_union");
+	assert_equal_double(v1_union_empty.at("a"), 1, "test_gd_variable_vector_union");
+	assert_equal_double(v1_union_empty.at("b"), -3, "test_gd_variable_vector_union");
+	assert_equal_double(v1_union_empty.at("c"), 5, "test_gd_variable_vector_union");
 
 	// two non-empty
 	VariableVector v1_union_v2 = variable_vector_union(v1, v2);
 	VariableVector v2_union_v1 = variable_vector_union(v2, v1);
 
 	assert_equal_int(v1_union_v2.size(), 6, "test_gd_variable_vector_union");
-	assert_equal_float(v1_union_v2.at("a"), 1, "test_gd_variable_vector_union");
-	assert_equal_float(v1_union_v2.at("b"), -3, "test_gd_variable_vector_union");
-	assert_equal_float(v1_union_v2.at("c"), 5, "test_gd_variable_vector_union");
-	assert_equal_float(v1_union_v2.at("d"), 7, "test_gd_variable_vector_union");
-	assert_equal_float(v1_union_v2.at("e"), 4, "test_gd_variable_vector_union");
-	assert_equal_float(v1_union_v2.at("f"), 0, "test_gd_variable_vector_union");
+	assert_equal_double(v1_union_v2.at("a"), 1, "test_gd_variable_vector_union");
+	assert_equal_double(v1_union_v2.at("b"), -3, "test_gd_variable_vector_union");
+	assert_equal_double(v1_union_v2.at("c"), 5, "test_gd_variable_vector_union");
+	assert_equal_double(v1_union_v2.at("d"), 7, "test_gd_variable_vector_union");
+	assert_equal_double(v1_union_v2.at("e"), 4, "test_gd_variable_vector_union");
+	assert_equal_double(v1_union_v2.at("f"), 0, "test_gd_variable_vector_union");
 
 	assert_equal_int(v2_union_v1.size(), 6, "test_gd_variable_vector_union");
-	assert_equal_float(v2_union_v1.at("a"), 1, "test_gd_variable_vector_union");
-	assert_equal_float(v2_union_v1.at("b"), -3, "test_gd_variable_vector_union");
-	assert_equal_float(v2_union_v1.at("c"), 5, "test_gd_variable_vector_union");
-	assert_equal_float(v2_union_v1.at("d"), 7, "test_gd_variable_vector_union");
-	assert_equal_float(v2_union_v1.at("e"), 4, "test_gd_variable_vector_union");
-	assert_equal_float(v2_union_v1.at("f"), 0, "test_gd_variable_vector_union");
+	assert_equal_double(v2_union_v1.at("a"), 1, "test_gd_variable_vector_union");
+	assert_equal_double(v2_union_v1.at("b"), -3, "test_gd_variable_vector_union");
+	assert_equal_double(v2_union_v1.at("c"), 5, "test_gd_variable_vector_union");
+	assert_equal_double(v2_union_v1.at("d"), 7, "test_gd_variable_vector_union");
+	assert_equal_double(v2_union_v1.at("e"), 4, "test_gd_variable_vector_union");
+	assert_equal_double(v2_union_v1.at("f"), 0, "test_gd_variable_vector_union");
 
 	// if the two VariableVectors overlap, an empty VariableVector should be returned
 	VariableVector v1_union_v3 = variable_vector_union(v1, v3);
@@ -228,9 +228,9 @@ void test_gd_vector_of_zeros() {
 
 	VariableVector zeros = vector_of_zeros(var_names);
 	assert_equal_int(zeros.size(), 3, "test_gd_vector_of_zeros");
-	assert_equal_float(zeros["A"], 0, "test_gd_vector_of_zeros");
-	assert_equal_float(zeros["B"], 0, "test_gd_vector_of_zeros");
-	assert_equal_float(zeros["C"], 0, "test_gd_vector_of_zeros");
+	assert_equal_double(zeros["A"], 0, "test_gd_vector_of_zeros");
+	assert_equal_double(zeros["B"], 0, "test_gd_vector_of_zeros");
+	assert_equal_double(zeros["C"], 0, "test_gd_vector_of_zeros");
 	
 	pass("test_gd_vector_of_zeros");
 
@@ -263,10 +263,10 @@ void test_gd_add_variable_vectors() {
 
 	assert_equal_int(v1_plus_v3.size(), 2, "test_gd_add_variable_vectors");
 	assert_equal_int(v3_plus_v1.size(), 2, "test_gd_add_variable_vectors");
-	assert_equal_float(v1_plus_v3.at("a"), 3, "test_gd_add_variable_vectors");
-	assert_equal_float(v3_plus_v1.at("b"), -7, "test_gd_add_variable_vectors");
-	assert_equal_float(v1_plus_v3.at("a"), 3, "test_gd_add_variable_vectors");
-	assert_equal_float(v3_plus_v1.at("b"), -7, "test_gd_add_variable_vectors");
+	assert_equal_double(v1_plus_v3.at("a"), 3, "test_gd_add_variable_vectors");
+	assert_equal_double(v3_plus_v1.at("b"), -7, "test_gd_add_variable_vectors");
+	assert_equal_double(v1_plus_v3.at("a"), 3, "test_gd_add_variable_vectors");
+	assert_equal_double(v3_plus_v1.at("b"), -7, "test_gd_add_variable_vectors");
 	
 
 	pass("test_gd_add_variable_vectors");
@@ -287,10 +287,10 @@ void test_gd_component_wise_div() {
 	// simple test
 	VariableVector scaled = component_wise_div(v, -2);
 	assert_equal_int(scaled.size(), 4, "test_gd_component_wise_div");
-	assert_equal_float(scaled.at("a"), -0.5, "test_gd_component_wise_div");
-	assert_equal_float(scaled.at("b"), 1.5, "test_gd_component_wise_div");
-	assert_equal_float(scaled.at("c"), 0, "test_gd_component_wise_div");
-	assert_equal_float(scaled.at("d"), -5000, "test_gd_component_wise_div");
+	assert_equal_double(scaled.at("a"), -0.5, "test_gd_component_wise_div");
+	assert_equal_double(scaled.at("b"), 1.5, "test_gd_component_wise_div");
+	assert_equal_double(scaled.at("c"), 0, "test_gd_component_wise_div");
+	assert_equal_double(scaled.at("d"), -5000, "test_gd_component_wise_div");
 
 	pass("test_gd_component_wise_div");
 }
@@ -310,9 +310,9 @@ void test_gd_increment_weight_vector() {
 
 	VariableVector incremented = increment_weight_vector(weights, partials);
 	assert_equal_int(incremented.size(), 3, "test_gd_scale_variable_vector");
-	assert_equal_float(incremented.at("a"), 3.01, "test_gd_scale_variable_vector");
-	assert_equal_float(incremented.at("b"), 4.02, "test_gd_scale_variable_vector");
-	assert_equal_float(incremented.at("c"), 4.97, "test_gd_scale_variable_vector");
+	assert_equal_double(incremented.at("a"), 3.01, "test_gd_scale_variable_vector");
+	assert_equal_double(incremented.at("b"), 4.02, "test_gd_scale_variable_vector");
+	assert_equal_double(incremented.at("c"), 4.97, "test_gd_scale_variable_vector");
 
 	pass("test_gd_increment_weight_vector");
 
@@ -338,10 +338,10 @@ void test_gd_scale_variable_vector() {
 	VariableVector v = {{"a", 1}, {"b", -3}, {"c", 0}, {"d", 10000}};
 	VariableVector scaled = scale_variable_vector(v, -0.01);
 	assert_equal_int(scaled.size(), 4, "test_gd_scale_variable_vector");
-	assert_equal_float(scaled.at("a"), -0.01, "test_gd_scale_variable_vector");
-	assert_equal_float(scaled.at("b"), 0.03, "test_gd_scale_variable_vector");
-	assert_equal_float(scaled.at("c"), 0, "test_gd_scale_variable_vector");
-	assert_equal_float(scaled.at("d"), -100, "test_gd_scale_variable_vector");
+	assert_equal_double(scaled.at("a"), -0.01, "test_gd_scale_variable_vector");
+	assert_equal_double(scaled.at("b"), 0.03, "test_gd_scale_variable_vector");
+	assert_equal_double(scaled.at("c"), 0, "test_gd_scale_variable_vector");
+	assert_equal_double(scaled.at("d"), -100, "test_gd_scale_variable_vector");
 
 	pass("test_gd_scale_variable_vector");
 
@@ -376,16 +376,16 @@ void test_gd_distance_between_variable_vectors() {
 	VariableVector v6 = {{"a", 2}, {"b", -0.3}, {"c", 10}, {"d", -0.5}};
 
 	// simple errors
-	assert_equal_float(distance_between_variable_vectors(v1, v5), -1, "test_gd_distance_between_variable_vectors");
-	assert_equal_float(distance_between_variable_vectors(v1, v6), -1, "test_gd_distance_between_variable_vectors");
+	assert_equal_double(distance_between_variable_vectors(v1, v5), -1, "test_gd_distance_between_variable_vectors");
+	assert_equal_double(distance_between_variable_vectors(v1, v6), -1, "test_gd_distance_between_variable_vectors");
 
 	// empty VariableVector edge case
-	assert_equal_float(distance_between_variable_vectors(empty_vv1, empty_vv2), 0, "test_gd_distance_between_variable_vectors");
+	assert_equal_double(distance_between_variable_vectors(empty_vv1, empty_vv2), 0, "test_gd_distance_between_variable_vectors");
 
 	// test the Pythagorean formula is implemented properly
-	assert_equal_float(distance_between_variable_vectors(v1, v2), 1.11803, "test_gd_distance_between_variable_vectors");
-	assert_equal_float(distance_between_variable_vectors(v1, v3), 6.27375, "test_gd_distance_between_variable_vectors");
-	assert_equal_float(distance_between_variable_vectors(v1, v4), 10.03444, "test_gd_distance_between_variable_vectors");
+	assert_equal_double(distance_between_variable_vectors(v1, v2), 1.11803, "test_gd_distance_between_variable_vectors");
+	assert_equal_double(distance_between_variable_vectors(v1, v3), 6.27375, "test_gd_distance_between_variable_vectors");
+	assert_equal_double(distance_between_variable_vectors(v1, v4), 10.03444, "test_gd_distance_between_variable_vectors");
 
 	pass("test_gd_distance_between_variable_vectors");
 
@@ -412,10 +412,10 @@ void run_gd_tests() {
 	cout << "\nAll Gradient Descent Tests Passed." << endl << endl;
 }
 
-/*test_gd_find_partials -- Observed float: -0.00814073 does not equal Expected: -2.8
-test_gd_find_partials -- Observed float: -0.0015479 does not equal Expected: -2.8
-test_gd_find_partials -- Observed float: -0.00756581 does not equal Expected: -2.8
-test_gd_find_partials -- Observed float: 0.00258278 does not equal Expected: -2.8
-test_gd_find_partials -- Observed float: -0.00488492 does not equal Expected: -2.8
-test_gd_find_partials -- Observed float: -0.00365385 does not equal Expected: -2.8
-test_gd_find_partials -- Observed float: -0.00242277 does not equal Expected: -2.8*/
+/*test_gd_find_partials -- Observed double: -0.00814073 does not equal Expected: -2.8
+test_gd_find_partials -- Observed double: -0.0015479 does not equal Expected: -2.8
+test_gd_find_partials -- Observed double: -0.00756581 does not equal Expected: -2.8
+test_gd_find_partials -- Observed double: 0.00258278 does not equal Expected: -2.8
+test_gd_find_partials -- Observed double: -0.00488492 does not equal Expected: -2.8
+test_gd_find_partials -- Observed double: -0.00365385 does not equal Expected: -2.8
+test_gd_find_partials -- Observed double: -0.00242277 does not equal Expected: -2.8*/

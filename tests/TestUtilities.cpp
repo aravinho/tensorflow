@@ -56,6 +56,14 @@ void assert_equal_float(float observed, float expected, const string& test_name)
 	}
 }
 
+void assert_equal_double(double observed, double expected, const string& test_name) {
+	if ((observed - expected) > FLOAT_TOLERANCE || (expected - observed) > FLOAT_TOLERANCE) {
+		cerr << test_name << " -- Observed double: " << observed << " does not equal Expected: " << expected << endl;
+		fail(test_name);
+		exit(EXIT_FAILURE);
+	}
+}
+
 void assert_equal_file_lines(const string& filename, const string expected_lines[], int start_line, int num_lines, const string& test_name) {
 	
 	ifstream file(filename);
@@ -139,6 +147,14 @@ void assert_greater_than(float observed, float lower_bound, const string& test_n
 }
 
 void assert_approximately_equal_float(float observed, float expected, float error_margin, const string& test_name) {
+	if ((observed - expected) > error_margin || (expected - observed) > error_margin) {
+		cerr << test_name << " -- Observed float: " << observed << " deviates from Expected: " << expected << " by more than " << error_margin << endl;
+		fail(test_name);
+		exit(EXIT_FAILURE);
+	}
+}
+
+void assert_approximately_equal_double(double observed, double expected, float error_margin, const string& test_name) {
 	if ((observed - expected) > error_margin || (expected - observed) > error_margin) {
 		cerr << test_name << " -- Observed float: " << observed << " deviates from Expected: " << expected << " by more than " << error_margin << endl;
 		fail(test_name);

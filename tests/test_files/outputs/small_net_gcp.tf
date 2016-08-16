@@ -60,7 +60,7 @@ define d/LAMBDA/d/k_minus_p_squared = mul d/LAMBDA/d/loss_two d/loss_two/d/k_min
 declare intvar d/k_minus_p_squared/d/k_minus_p
 declare intvar d/k_minus_p_squared/d/k_minus_p:0
 declare intvar d/k_minus_p_squared/d/k_minus_p:1
-define d/k_minus_p_squared/d/k_minus_p:0 = add -1 2
+define d/k_minus_p_squared/d/k_minus_p:0 = sub 2 1
 define d/k_minus_p_squared/d/k_minus_p:1 = pow k_minus_p d/k_minus_p_squared/d/k_minus_p:0
 define d/k_minus_p_squared/d/k_minus_p = mul 2 d/k_minus_p_squared/d/k_minus_p:1
 declare intvar d/LAMBDA/d/k_minus_p
@@ -108,7 +108,7 @@ define d/LAMBDA/d/j_minus_n_squared = mul d/LAMBDA/d/loss_one d/loss_one/d/j_min
 declare intvar d/j_minus_n_squared/d/j_minus_n
 declare intvar d/j_minus_n_squared/d/j_minus_n:0
 declare intvar d/j_minus_n_squared/d/j_minus_n:1
-define d/j_minus_n_squared/d/j_minus_n:0 = add -1 2
+define d/j_minus_n_squared/d/j_minus_n:0 = sub 2 1
 define d/j_minus_n_squared/d/j_minus_n:1 = pow j_minus_n d/j_minus_n_squared/d/j_minus_n:0
 define d/j_minus_n_squared/d/j_minus_n = mul 2 d/j_minus_n_squared/d/j_minus_n:1
 declare intvar d/LAMBDA/d/j_minus_n
@@ -150,7 +150,7 @@ define d/LAMBDA/d/i_minus_m_squared = mul d/LAMBDA/d/loss_one d/loss_one/d/i_min
 declare intvar d/i_minus_m_squared/d/i_minus_m
 declare intvar d/i_minus_m_squared/d/i_minus_m:0
 declare intvar d/i_minus_m_squared/d/i_minus_m:1
-define d/i_minus_m_squared/d/i_minus_m:0 = add -1 2
+define d/i_minus_m_squared/d/i_minus_m:0 = sub 2 1
 define d/i_minus_m_squared/d/i_minus_m:1 = pow i_minus_m d/i_minus_m_squared/d/i_minus_m:0
 define d/i_minus_m_squared/d/i_minus_m = mul 2 d/i_minus_m_squared/d/i_minus_m:1
 declare intvar d/LAMBDA/d/i_minus_m

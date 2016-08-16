@@ -2,7 +2,10 @@
 
 #include "TestNode.h"
 #include "TestUtilities.h"
-#include "../Node.h"
+#include "../src/Node.h"
+
+using namespace std;
+
 
 void test_node_constructor() {
 

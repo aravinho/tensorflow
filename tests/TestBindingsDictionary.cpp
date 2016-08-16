@@ -2,7 +2,7 @@
 #include <cfloat>
 
 #include "TestBindingsDictionary.h"
-#include "../BindingsDictionary.h"
+#include "../src/BindingsDictionary.h"
 #include "TestUtilities.h"
 
 using namespace std;
@@ -32,8 +32,8 @@ void test_bd_add_variable() {
 	BindingsDictionary b;
 	assert_equal_int(b.add_variable("x"), 0, "test_bd_add_variable");
 
-	// test dummy value is FLT_MAX
-	assert_true(b.get_value("x") == FLT_MAX, "Dummy value should be FLT_MAX", "test_bd_add_variable");
+	// test dummy value is DBL_MAX
+	assert_true(b.get_value("x") == DBL_MAX, "Dummy value should be DBL_MAX", "test_bd_add_variable");
 
 	// test cannot double add
 	assert_equal_int(b.add_variable("x"), -1, "test_bd_add_variable");
@@ -48,13 +48,13 @@ void test_bd_bind_value() {
 
 	// test bind fails if not declared
 	assert_equal_int(b->bind_value("x", 12), -1, "test_bd_bind_value");
-	assert_true(b->get_value("x") == FLT_MIN, "FLT_MIN if not yet added", "test_bd_bind_value");
+	assert_true(b->get_value("x") == DBL_MIN, "DBL_MIN if not yet added", "test_bd_bind_value");
 
 	assert_equal_int(b->add_variable("x"), 0, "test_bd_bind_value");
 
-	// test bind fails if value is FLT_MIN or FLT_MAX
-	assert_equal_int(b->bind_value("x", FLT_MIN), -1, "test_bd_bind_value");
-	assert_equal_int(b->bind_value("x", FLT_MAX), -1, "test_bd_bind_value");
+	// test bind fails if value is DBL_MIN or DBL_MAX
+	assert_equal_int(b->bind_value("x", DBL_MIN), -1, "test_bd_bind_value");
+	assert_equal_int(b->bind_value("x", DBL_MAX), -1, "test_bd_bind_value");
 
 	// test bind works correctly
 	assert_equal_int(b->bind_value("x", 12), 0, "test_bd_bind_value");
@@ -71,16 +71,16 @@ void test_bd_get_value() {
 
 	BindingsDictionary b;
 
-	// test returns FLT_MIN if not declared
-	assert_true(b.get_value("x") == FLT_MIN, "If not declared, should return FLT_MIN", "test_bd_get_value");
+	// test returns DBL_MIN if not declared
+	assert_true(b.get_value("x") == DBL_MIN, "If not declared, should return DBL_MIN", "test_bd_get_value");
 
-	// test returns FLT_MAX if declared but not defined
+	// test returns DBL_MAX if declared but not defined
 	b.add_variable("x");
-	assert_true(b.get_value("x") == FLT_MAX, "If declared but not defined, should return FLT_MAX", "test_bd_get_value");
+	assert_true(b.get_value("x") == DBL_MAX, "If declared but not defined, should return DBL_MAX", "test_bd_get_value");
 
 	// test returned correct value if defined
 	b.bind_value("x", -2342.2);
-	assert_equal_float(b.get_value("x"), -2342.2, "test_bd_get_value");
+	assert_equal_double(b.get_value("x"), -2342.2, "test_bd_get_value");
 
 	pass("test_bd_get_value");
 

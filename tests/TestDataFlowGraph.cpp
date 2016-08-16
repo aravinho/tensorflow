@@ -2,7 +2,10 @@
 
 #include "TestDataFlowGraph.h"
 #include "TestUtilities.h"
-#include "../DataFlowGraph.h"
+#include "../src/DataFlowGraph.h"
+
+using namespace std;
+
 
 void test_dfg_constructor() {
 

@@ -91,7 +91,7 @@ declare intvar d/I/d/G
 declare intvar d/I/d/H
 declare intvar d/I/d/G:0
 declare intvar d/I/d/G:1
-define d/I/d/G:0 = add -1 H
+define d/I/d/G:0 = sub H 1
 define d/I/d/G:1 = pow G d/I/d/G:0
 define d/I/d/G = mul H d/I/d/G:1
 declare intvar d/I/d/H:0

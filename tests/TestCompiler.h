@@ -18,6 +18,7 @@ void test_comp_define_partial_lambda();
 void test_comp_declare_child_partials();
 void test_comp_define_child_partials();
 
+
 void run_comp_tests();
 
 

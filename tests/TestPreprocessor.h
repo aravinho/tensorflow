@@ -32,6 +32,11 @@ void test_pp_is_valid_define_line();
 void test_pp_is_valid_define_vector_line();
 void test_pp_is_valid_declare_vector_line();
 void test_pp_is_valid_macro();
+void test_vector_component_functions();
+void test_define_vector_components();
+void test_is_valid_reduce_vector_line();
+void test_reduce_vector();
+
 
 void run_pp_tests();
 
