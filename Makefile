@@ -1,76 +1,138 @@
 test_objects = TestUtilities.o TestNode.o TestDataFlowGraph.o TestBindingsDictionary.o TestPreprocessor.o TestCompiler.o TestInterpreter.o TestGradientDescent.o
-class_objects = DataFlowGraph.o Node.o Compiler.o Preprocessor.o utilities.o Interpreter.o BindingsDictionary.o GradientDescent.o
+src_objects = DataFlowGraph.o Node.o Compiler.o Preprocessor.o utilities.o Interpreter.o BindingsDictionary.o GradientDescent.o
+run_objects = RunPreprocessor.o RunCompiler.o RunInterpreter.o RunGradientDescent.o RunTests.o
+executables = preprocessor compiler interpreter weighteval
 
-tensorflow: utilities.o Node.o DataFlowGraph.o Compiler.o RunCompiler.o 
-	g++ Compiler.o Node.o DataFlowGraph.o RunCompiler.o utilities.o -o tensorflow
+preprocessor_src_objects = Preprocessor.o utilities.o
+compiler_src_objects = Node.o DataFlowGraph.o Compiler.o Preprocessor.o utilities.o
+interpreter_src_objects = BindingsDictionary.o Interpreter.o Preprocessor.o utilities.o
+weighteval_src_objects = $(interpreter_src_objects) GradientDescent.o utilities.o
 
-interpreter: utilities.o Interpreter.o BindingsDictionary.o RunInterpreter.o
-	g++ utilities.o BindingsDictionary.o Interpreter.o RunInterpreter.o -o interpreter
-
-weighteval: utilities.o BindingsDictionary.o Interpreter.o GradientDescent.o
-	g++ utilities.o BindingsDictionary.o Interpreter.o GradientDescent.o -o weighteval
-
-preprocessor: Preprocessor.o utilities.o
-	g++ Preprocessor.o utilities.o -o preprocessor
-
-test: $(test_objects) $(class_objects) RunTests.o
-	g++ $(test_objects) $(class_objects) RunTests.o -o test
-
-Preprocessor.o: Preprocessor.cpp Preprocessor.h utilities.h
-	g++ -c -std=c++11 Preprocessor.cpp
-
-RunCompiler.o: RunCompiler.cpp
-	g++ -c -std=c++11 RunCompiler.cpp
-
-DataFlowGraph.o: DataFlowGraph.cpp DataFlowGraph.h
-	g++ -c -std=c++11 DataFlowGraph.cpp
-
-Node.o: Node.cpp Node.h
-	g++ -c -std=c++11 Node.cpp
-
-Compiler.o: Compiler.cpp Compiler.h
-	g++ -c -std=c++11 Compiler.cpp
-
-utilities.o: utilities.cpp utilities.h
-	g++ -c -std=c++11 utilities.cpp
+# Compiler and Linker Flags
+CC = g++
+CFLAGS = -c -std=c++11
+LINKFLAGS = -o
 
 
-RunInterpreter.o: RunInterpreter.cpp
-	g++ -c -std=c++11 RunInterpreter.cpp
+# --------------------- Common Targets -----------------------
 
-Interpreter.o: Interpreter.cpp Interpreter.h utilities.h BindingsDictionary.h
-	g++ -c -std=c++11 Interpreter.cpp
+# "make" creates all the object files and executables
+all: preprocessor compiler interpreter weighteval
 
-BindingsDictionary.o: BindingsDictionary.cpp BindingsDictionary.h utilities.h
-	g++ -c -std=c++11 BindingsDictionary.cpp
+# "make clean" removes all object files and executables
+clean:
+	rm $(test_objects) $(src_objects) $(run_objects) $(executables)
 
-GradientDescent.o: GradientDescent.h GradientDescent.cpp
-	g++ -c -std=c++11 GradientDescent.cpp
 
+
+# ------------------- Source Binaries -------------------------
+
+preprocessor: RunPreprocessor.o $(preprocessor_src_objects)
+	$(CC) RunPreprocessor.o $(preprocessor_src_objects) $(LINKFLAGS) preprocessor
+
+compiler: RunCompiler.o $(compiler_src_objects)
+	$(CC) RunCompiler.o $(compiler_src_objects) $(LINKFLAGS) compiler
+
+interpreter: RunInterpreter.o $(interpreter_src_objects)
+	$(CC) RunInterpreter.o $(interpreter_src_objects) $(LINKFLAGS) interpreter
+
+weighteval: RunGradientDescent.o $(weighteval_src_objects)
+	$(CC) RunGradientDescent.o $(weighteval_src_objects) $(LINKFLAGS) weighteval
+
+
+
+# ----------------------- Test Binaries ------------------------
+
+test: RunTests.o $(test_objects) $(src_objects)
+	$(CC) RunTests.o $(test_objects) $(src_objects) $(LINKFLAGS) test
+
+
+
+# --------------------- Source Object Files ---------------------
+
+# utilities.h declares utility functions, data types
+# and constants used by all parts of the system.
+utilities.o: src/utilities.cpp src/utilities.h
+	$(CC) $(CFLAGS) src/utilities.cpp
+
+
+# The Preprocessor expands TenFlang programs.
+# Every TenFlang program must be preprocessed
+# before it can be compiled or interpreted.
+Preprocessor.o: src/Preprocessor.cpp src/Preprocessor.h
+	$(CC) $(CFLAGS) src/Preprocessor.cpp
+
+RunPreprocessor.o: src/RunPreprocessor.cpp
+	$(CC) $(CFLAGS) src/RunPreprocessor.cpp
+
+
+# The Node and DataFlowGraph classes are used by the Compiler.
+Node.o: src/Node.cpp src/Node.h
+	$(CC) $(CFLAGS) src/Node.cpp
+
+DataFlowGraph.o: src/DataFlowGraph.cpp src/DataFlowGraph.h
+	$(CC) $(CFLAGS) src/DataFlowGraph.cpp
+
+
+# The Compiler compiles Shape Programs into Gradient Computing Programs (GCPs).
+Compiler.o: src/Compiler.cpp src/Compiler.h
+	$(CC) $(CFLAGS) src/Compiler.cpp
+
+RunCompiler.o: src/RunCompiler.cpp
+	$(CC) $(CFLAGS) src/RunCompiler.cpp
+
+
+# The BindingsDictionary class is used by the Interpreter.
+BindingsDictionary.o: src/BindingsDictionary.cpp src/BindingsDictionary.h
+	$(CC) $(CFLAGS) src/BindingsDictionary.cpp
+
+
+# The Interpreter interprets and returns the outputs of a TenFlang program.
+Interpreter.o: src/Interpreter.cpp src/Interpreter.h
+	$(CC) $(CFLAGS) src/Interpreter.cpp
+
+RunInterpreter.o: src/RunInterpreter.cpp
+	$(CC) $(CFLAGS) src/RunInterpreter.cpp
+
+
+# GradientDescent.h declares functions used in the Weight Evaluation Phase.
+GradientDescent.o: src/GradientDescent.h src/GradientDescent.cpp
+	$(CC) $(CFLAGS) src/GradientDescent.cpp
+
+RunGradientDescent.o: src/RunGradientDescent.cpp
+	$(CC) $(CFLAGS) src/RunGradientDescent.cpp
+
+
+
+# ------------------------ Test Object Files -------------------- 
+
+# TestUtilities.h defines testing helper functions used by all the test files.
 TestUtilities.o: tests/TestUtilities.cpp tests/TestUtilities.h
-	g++ -c -std=c++11 tests/TestUtilities.cpp
+	$(CC) $(CFLAGS) tests/TestUtilities.cpp
 
-TestNode.o: Node.o tests/TestNode.cpp tests/TestNode.h Node.h
-	g++ -c -std=c++11 tests/TestNode.cpp
+# Every class has its own test file.
+TestNode.o: tests/TestNode.cpp tests/TestNode.h
+	$(CC) $(CFLAGS) tests/TestNode.cpp
 
-TestDataFlowGraph.o: DataFlowGraph.o tests/TestDataFlowGraph.cpp tests/TestDataFlowGraph.h
-	g++ -c -std=c++11 tests/TestDataFlowGraph.cpp
+TestDataFlowGraph.o: tests/TestDataFlowGraph.cpp tests/TestDataFlowGraph.h
+	$(CC) $(CFLAGS) tests/TestDataFlowGraph.cpp
 
-TestBindingsDictionary.o: BindingsDictionary.o tests/TestBindingsDictionary.cpp tests/TestBindingsDictionary.h
-	g++ -c -std=c++11 tests/TestBindingsDictionary.cpp
+TestBindingsDictionary.o: tests/TestBindingsDictionary.cpp tests/TestBindingsDictionary.h
+	$(CC) $(CFLAGS) tests/TestBindingsDictionary.cpp
 
-TestPreprocessor.o: Preprocessor.o tests/TestPreprocessor.cpp tests/TestPreprocessor.h
-	g++ -c -std=c++11 tests/TestPreprocessor.cpp
+TestPreprocessor.o: tests/TestPreprocessor.cpp tests/TestPreprocessor.h
+	$(CC) $(CFLAGS) tests/TestPreprocessor.cpp
 
-TestCompiler.o: Compiler.o tests/TestCompiler.cpp tests/TestCompiler.h
-	g++ -c -std=c++11 tests/TestCompiler.cpp
+TestCompiler.o: tests/TestCompiler.cpp tests/TestCompiler.h
+	$(CC) $(CFLAGS) tests/TestCompiler.cpp
 
-TestInterpreter.o: Interpreter.o tests/TestInterpreter.cpp tests/TestInterpreter.h
-	g++ -c -std=c++11 tests/TestInterpreter.cpp
+TestInterpreter.o: tests/TestInterpreter.cpp tests/TestInterpreter.h
+	$(CC) $(CFLAGS) tests/TestInterpreter.cpp
 
-TestGradientDescent.o: GradientDescent.o tests/TestGradientDescent.cpp tests/TestGradientDescent.h
-	g++ -c -std=c++11 tests/TestGradientDescent.cpp
+TestGradientDescent.o: tests/TestGradientDescent.cpp tests/TestGradientDescent.h
+	$(CC) $(CFLAGS) tests/TestGradientDescent.cpp
 
+# RunTest.cpp runs all of the tests.
 RunTests.o: tests/RunTests.cpp
-	g++ -c -std=c++11 tests/RunTests.cpp
+	$(CC) $(CFLAGS) tests/RunTests.cpp
 
