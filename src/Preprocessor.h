@@ -88,26 +88,26 @@ public:
      * The declare_vector instruction gets broken down into as many regular declare instructions as there are elements in the vector.
      *
      * ex. "declare_vector input x 3" becomes:
+     * "declare input x.0"
      * "declare input x.1"
      * "declare input x.2"
-     * "declare input x.3"
      *
      * Defintions of variables as the dot product of two vector variables get broken down into component-wise primitives.
      * The dot product of two vectors get broken up into several multiplications and additions.
      *
      * ex. "define_dot dot_prod = dot a b" becomes the following: (Assume dot_prod, a and b have been declared, and a and b are both two-element vectors.)
-     * "declare dot_prod.1"
-     * "declare dot_prod.2"
+     * "declare intvar dot_prod.0"
+     * "define dot_prod.0 = mul a.0 b.0"
+     * "declare intvar dot_prod.1"
      * "define dot_prod.1 = mul a.1 b.1"
-     * "define dot_prod.2 = mul a.2 b.2"
-     * "define dot_prod = add dot_prod.1 dot_prod.2"
+     * "define dot_prod = add dot_prod.0 dot_prod.1"
      *
      * Definitions of variables as the result of a macro operation get expanded into the sub-macro operations that make up the macro.
      * Suppose the following macro was defined at the top of the Shape Program:
      * "macro c = my_macro a b; define intvar p; declare p = add a b; define c = mul p p"
      * The line "define z = my_macro x y" becomes the following:
      * (Assume z, x and y have all been declared, and my_macro is being used for the 3rd time (reference counts are 0 indexed)):
-     * "declare z_p:2"
+     * "declare intvar z_p:2"
      * "define z_p:2 = add x y"
      * "define z = mul z_p:2 z_p:2"
      *
@@ -116,14 +116,14 @@ public:
      * (Assume z and x are three-dimensional vectors, q is a scalar variable, and my_macro is the same user-defined binary macro as in the previous example)
      * (This would now be the 4th, 5th and 6th references of my_macro):
      * 
-     * "declare z.0_p:3"
-     * "declare z.0_p:3 = add x.0 q"
+     * "declare intvar z.0_p:3"
+     * "define z.0_p:3 = add x.0 q"
      * "define z.0 = mul z.0_p:3 z.0_p:3"
-     * "declare z.1_p:4"
-     * "declare z.1_p:4 = add x.1 q"
+     * "declare intvar z.1_p:4"
+     * "define z.1_p:4 = add x.1 q"
      * "define z.1 = mul z.1_p:4 z.1_p:4"
-     * "declare z.2_p:5"
-     * "declare z.2_p:5 = add x.2 q"
+     * "declare intvar z.2_p:5"
+     * "define z.2_p:5 = add x.2 q"
      * "define z.2 = mul z.2_p:5 z.2_p:5"
      *
      *
@@ -265,9 +265,9 @@ public:
      * The dot product of two vectors get broken up into several multiplications and additions.
      *
      * ex. "define_dot dot_prod = dot a b" becomes the following: (Assume dot_prod, a and b have been declared, and a and b are both two-element vectors.)
-     * "declare dot_prod.1"
-     * "declare dot_prod.2"
+     * "declare intvar dot_prod.1"
      * "define dot_prod.1 = mul a.1 b.1"
+     * "declare intvar dot_prod.2"
      * "define dot_prod.2 = mul a.2 b.2"
      * "define dot_prod = add dot_prod.1 dot_prod.2"
      *
@@ -284,6 +284,13 @@ public:
      *
      * The vector reduction is broken up into intermediate operations that accumulate a final result,
      *  and a final defintion of RESULT as the last intermediate accumulation intvar.
+     *
+     * ex. "define z = reduce_vector u add" becomes the following (Assume z has been declared, and u is a 3-element vector that has been declared and defined): 
+     * "declare intvar z.0"
+     * "define z.0 = add u.0 u.1"
+     * "declare intvar z.1"
+     * "define z.1 = add z.0 u.2"
+     * "define z = z.1"
      *
      * The expanded lines are written into EXP_PROG.
      * Returns the number of expanded_lines.

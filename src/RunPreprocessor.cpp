@@ -9,7 +9,7 @@ using namespace std;
 void preprocessor_exit_with_usage() {
 	cerr << "\nMust provide the name of a TenFlang file, and the name of the file to which the Expanded Program will be written." << endl;
 	cerr << "Example: " << endl;
-	cerr << "# ./preprocessor my_shape_program.tf my_expanded_shape_program.tf" << endl << endl;
+	cerr << "# ./preprocessor my_program.tf my_expanded_program.tf" << endl << endl;
 	exit(EXIT_FAILURE);
 }
 

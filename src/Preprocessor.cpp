@@ -582,7 +582,7 @@ int Preprocessor::expand_reduce_vector_instruction(const string& result, const s
         // define NEW_ACCUMULATION
         // if FUNC is a macro, this definition requires macro expansion
         if (func_is_primitive) {
-            exp_prog << "define " << new_accumulation << " = " << func << " " << prev_accumulation << " " << ith_component << endl;;
+            exp_prog << "define " << new_accumulation << " = " << func << " " << prev_accumulation << " " << ith_component << endl;
             num_lines++;
         }
         else if (func_is_macro) {
